@@ -1,0 +1,15 @@
+export const SKELETON_ENEMY = {
+    name: "Skeleton",
+    img: "entity/enemy_class/skeleton/skeleton_images/skeleton.png",
+    type: "monster",
+    size: "m",
+    levels: ["all"],
+    hp: 55,
+    atk: 7,
+    def: 2,
+    crit: 1,
+    dodge: 0,
+    aim: 2,
+    exp: 12,
+    desc: "An undead mob that shambles forward relentlessly.",
+};

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Items Editor</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="wrap">
+    <div class="panel">
+        <nav class="top-nav" aria-label="Editor sections">
+            <a class="top-nav-link" href="/player.html">Player</a>
+            <a class="top-nav-link" href="/enemy.html">Enemy</a>
+            <a class="top-nav-link" href="/level.html">Level</a>
+            <a class="top-nav-link is-active" href="/items.html">Items</a>
+        </nav>
+    </div>
+    <div class="panel">
+        <h1>Items Editor</h1>
+        <div class="muted">This page is ready for item editing features.</div>
+    </div>
+</div>
+<script>
+(function () {
+    const stream = new EventSource('/__live_reload');
+    stream.addEventListener('reload', function () {
+        window.location.reload();
+    });
+})();
+</script>
+</body>
+</html>
+

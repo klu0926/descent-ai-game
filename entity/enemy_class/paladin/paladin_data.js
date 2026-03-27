@@ -1,0 +1,15 @@
+export const PALADIN_ENEMY = {
+    name: "Paladin",
+    img: "entity/enemy_class/paladin/paladin_images/paladin.png",
+    type: "paladin",
+    size: "m",
+    levels: ["all"],
+    hp: 78,
+    atk: 11,
+    def: 6,
+    crit: 4,
+    dodge: 2,
+    aim: 6,
+    exp: 28,
+    desc: "A corrupted champion with strong armor, healthy endurance, and steady attacks. It wins by outlasting weaker foes.",
+};

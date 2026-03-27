@@ -1,0 +1,15 @@
+export const SLIME_ENEMY = {
+    name: "Slime",
+    img: "entity/enemy_class/slime/slime_images/slime.png",
+    type: "monster",
+    size: "s",
+    levels: ["all"],
+    hp: 40,
+    atk: 5,
+    def: 3,
+    crit: 1,
+    dodge: 1,
+    aim: 1,
+    exp: 10,
+    desc: "A simple blob creature with modest health and little finesse. Easy to read, but still annoying if ignored.",
+};

@@ -1,0 +1,15 @@
+export const GOLEM_ENEMY = {
+    name: "Golem",
+    img: "entity/enemy_class/golem/golem_images/golem.png",
+    type: "monster",
+    size: "l",
+    levels: ["all"],
+    hp: 95,
+    atk: 9,
+    def: 8,
+    crit: 2,
+    dodge: 0,
+    aim: 3,
+    exp: 30,
+    desc: "A towering stone guardian built like a wall. Enormous health and defense make it a slow, stubborn test of endurance.",
+};

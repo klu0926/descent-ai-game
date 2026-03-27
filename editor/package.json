@@ -1,0 +1,15 @@
+{
+  "name": "enemy-editor",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js --no-watch",
+    "dev": "nodemon"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "dependencies": {
+    "tinify": "^1.8.2"
+  }
+}

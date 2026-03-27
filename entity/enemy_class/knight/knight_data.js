@@ -1,0 +1,15 @@
+export const KNIGHT_ENEMY = {
+    name: "Knight",
+    img: "entity/enemy_class/knight/knight_images/knight.png",
+    type: "warrior",
+    size: "l",
+    levels: ["all"],
+    hp: 72,
+    atk: 10,
+    def: 7,
+    crit: 3,
+    dodge: 1,
+    aim: 5,
+    exp: 24,
+    desc: "A disciplined heavy fighter wrapped in steel. High defense and reliable stats make it a durable battlefield anchor.",
+};

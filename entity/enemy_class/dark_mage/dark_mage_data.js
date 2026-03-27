@@ -1,0 +1,15 @@
+export const DARK_MAGE_ENEMY = {
+    name: "Dark Mage",
+    img: "entity/enemy_class/dark_mage/dark_mage_images/dark_mage.png",
+    type: "mage",
+    size: "m",
+    levels: ["all"],
+    hp: 20,
+    atk: 14,
+    def: 1,
+    crit: 8,
+    dodge: 4,
+    aim: 7,
+    exp: 16,
+    desc: "A fragile spellcaster built for burst damage. Low defenses make it brittle, but its magic can end fights quickly.",
+};

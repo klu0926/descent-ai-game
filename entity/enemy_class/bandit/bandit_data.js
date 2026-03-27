@@ -1,0 +1,15 @@
+export const BANDIT_ENEMY = {
+    name: "bandit",
+    img: "entity/enemy_class/bandit/bandit_images/bandit.png",
+    type: "warrior",
+    size: "m",
+    levels: ["all"],
+    hp: 50,
+    atk: 8,
+    def: 3,
+    crit: 4,
+    dodge: 5,
+    aim: 6,
+    exp: 17,
+    desc: "A balanced raider leader with decent offense and enough toughness to stay in the fight longer than lesser bandits.",
+};

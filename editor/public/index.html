@@ -1,0 +1,138 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enemy Editor</title>
+    <link rel="stylesheet" href="./style.css?v=20260327a">
+<script defer src="./main.js?v=20260327a"></script>
+<script>
+(function () {
+    const stream = new EventSource('/__live_reload');
+    stream.addEventListener('reload', function () {
+        window.location.reload();
+    });
+})();
+</script></head>
+<body>
+<div class="wrap">
+    <div class="panel">
+        <nav class="top-nav" aria-label="Editor sections">
+            <a class="top-nav-link" href="/player.html">Player</a>
+            <a class="top-nav-link is-active" href="/enemy.html">Enemy</a>
+            <a class="top-nav-link" href="/level.html">Level</a>
+            <a class="top-nav-link" href="/items.html">Items</a>
+        </nav>
+    </div>
+
+    <div class="panel">
+        <h1>Enemy Data Editor</h1>
+        <div class="muted">Edits here write directly into <code>entity/enemy_class/*_data.js</code> and update <code>entity/enemy_class/index.js</code> when adding new enemies.</div>
+    </div>
+
+    <div class="panel">
+        <h1 class="section-title">Add New Enemy</h1>
+        <div class="add-main-col mt8">
+            <div class="stats-row">
+                <div class="stats-field">
+                    <span class="add-col-label">name</span>
+                    <input id="new-name" placeholder="name">
+                </div>
+                <div class="stats-field">
+                    <span id="size-tip-trigger" class="add-col-label tip-stat-trigger" data-tip="">size</span>
+                    <select id="new-size"></select>
+                </div>
+                <div class="stats-field">
+                    <span class="add-col-label">hp</span>
+                    <input id="new-hp" class="small" type="number" value="60">
+                </div>
+                <div class="stats-field">
+                    <span class="add-col-label">atk</span>
+                    <input id="new-atk" class="small" type="number" value="10">
+                </div>
+                <div class="stats-field">
+                    <span class="add-col-label">def</span>
+                    <input id="new-def" class="small" type="number" value="5">
+                </div>
+                <div class="stats-field">
+                    <span class="add-col-label">crit</span>
+                    <input id="new-crit" class="small" type="number" value="3">
+                </div>
+                <div class="stats-field">
+                    <span class="add-col-label">dodge</span>
+                    <input id="new-dodge" class="small" type="number" value="3">
+                </div>
+                <div class="stats-field">
+                    <span class="add-col-label">aim</span>
+                    <input id="new-aim" class="small" type="number" value="3">
+                </div>
+                <div class="stats-field">
+                    <span class="add-col-label">exp</span>
+                    <input id="new-exp" class="small" type="number" value="15">
+                </div>
+            </div>
+            <div class="add-media-row">
+                <div class="add-image-row">
+                    <span class="add-col-label">image</span>
+                    <button id="new-image-picker-btn" class="new-image-picker-btn add-image-inline-btn" type="button">
+                        <span id="new-image-picker-text" class="new-image-picker-text">click to import image</span>
+                        <img id="new-image-preview" class="new-image-preview hidden" alt="New enemy image preview">
+                    </button>
+                    <input id="new-image-input" class="enemy-image-input" type="file" accept="image/*">
+                </div>
+                <div class="add-desc-row">
+                    <span class="add-col-label">description</span>
+                    <textarea id="new-desc" class="enemy-description" placeholder="description"></textarea>
+                </div>
+            </div>
+            <div class="add-action-row">
+                <button id="add-btn" type="button">Add Enemy</button>
+                <div id="add-form-warning" class="add-form-warning hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel panel-flex-col">
+        <h1 class="section-title">Enemy Panel</h1>
+        <div id="enemy-sort-bar" class="enemy-sort-bar"></div>
+        <div class="muted">Edit each enemy and use Save or Reset per card.</div>
+        <div id="enemy-panel-list" class="enemy-panel-list"></div>
+    </div>
+</div>
+
+<div id="add-success-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="add-success-title">
+        <h2 id="add-success-title" class="modal-title">Enemy Added</h2>
+        <p id="add-success-message" class="modal-message">Enemy created successfully.</p>
+        <button id="add-success-close" type="button">OK</button>
+    </div>
+</div>
+
+<div id="delete-confirm-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+        <h2 id="delete-confirm-title" class="modal-title">Delete Enemy</h2>
+        <p id="delete-confirm-message" class="modal-message">Delete this enemy from the project?</p>
+        <div class="modal-actions">
+            <button id="delete-cancel-btn" type="button" class="btn-secondary">Cancel</button>
+            <button id="delete-confirm-btn" type="button" class="btn-danger">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div id="image-processing-overlay" class="processing-overlay hidden" aria-hidden="true">
+    <div class="processing-overlay-card">
+        <div id="processing-overlay-text" class="processing-overlay-text">Processing image...</div>
+        <div class="processing-progress-track">
+            <div id="processing-progress-fill" class="processing-progress-fill"></div>
+        </div>
+        <div id="processing-progress-label" class="processing-progress-label">0%</div>
+    </div>
+</div>
+
+</body>
+</html>
+
+
+
+
+

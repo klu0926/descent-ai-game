@@ -1,0 +1,15 @@
+export const CHIEF_ENEMY = {
+    name: "chief",
+    img: "entity/enemy_class/chief/chief_images/chief.png",
+    type: "monster",
+    size: "l",
+    levels: ["all"],
+    hp: 100,
+    atk: 25,
+    def: 5,
+    crit: 10,
+    dodge: 3,
+    aim: 3,
+    exp: 100,
+    desc: "Once a noble tribal leader, the chief monster was twisted by dark magic into a ruthless tyrant. His once-wise eyes now burn with hatred, and his massive form radiates fear. He commands shadows and destruction, ruling through terror, driven by betrayal and an insatiable hunger for power.",
+};

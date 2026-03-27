@@ -1,0 +1,15 @@
+export const ARCHER_ENEMY = {
+    name: "Archer",
+    img: "entity/enemy_class/archer/archer_images/archer.png",
+    type: "archer",
+    size: "s",
+    levels: ["all"],
+    hp: 30,
+    atk: 8,
+    def: 2,
+    crit: 7,
+    dodge: 9,
+    aim: 10,
+    exp: 12,
+    desc: "A nimble ranged skirmisher who stays light on armor and relies on aim, dodge, and clean shots to wear enemies down.",
+};

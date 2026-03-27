@@ -1,0 +1,13 @@
+features: 
+Enemy buff and Debuffs
+- Allow more than one enemy to appear at a time.
+- story (notes, writing, journal)
+    -   your death will continute the story
+    - you are a summoner, so you don't actually die
+    - only your servent die (they were already dead from the start)
+    - so your progress is alway keep (logs, map, )
+
+- camp building (permanent buff + skill) (keep when your servent die)
+- dungeon traveling (undergroud train)
+- event system (random chance to trigger an event based on the location)
+- different area (diffenret debuffs/ enemy types / event)

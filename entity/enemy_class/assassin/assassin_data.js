@@ -1,0 +1,15 @@
+export const ASSASSIN_ENEMY = {
+    name: "Assassin",
+    img: "entity/enemy_class/assassin/assassin_images/assassin.png",
+    type: "rogue",
+    size: "m",
+    levels: ["all"],
+    hp: 34,
+    atk: 13,
+    def: 1,
+    crit: 12,
+    dodge: 14,
+    aim: 10,
+    exp: 19,
+    desc: "A glass-cannon killer that thrives on precision and evasion. Hard to pin down, and deadly when its strike lands cleanly.",
+};

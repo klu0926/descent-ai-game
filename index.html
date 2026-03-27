@@ -1,0 +1,230 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto-Battler: Shadows & Steel</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script type="module" src="script.js" defer></script>
+</head>
+
+<body>
+    <audio id="bg-music" loop>
+        <source src="resources/music/stereo_color-battle-drum-493709.mp3" type="audio/mpeg">
+    </audio>
+    <div class="top-controls">
+        <button id="editor-page-btn" class="btn-editor-square" title="Open Enemy Editor">E</button>
+        <button id="music-toggle-btn" class="btn-circle" title="Adjust Music Volume">ðŸ”‰</button>
+    </div>
+
+    <div id="game-container">
+        <div class="arena-hud">
+            <div class="entity-info">
+                <h2 class="entity-name" id="player-name">Lv.1 Adventurer</h2>
+                <div class="hp-bar-container">
+                    <div class="hp-bar" id="player-hp-bar"></div>
+                    <span class="hp-text" id="player-hp-text">100 / 100</span>
+                </div>
+                <div id="player-stats-panel" class="stats-panel golden-text stats-panel-compact stats-panel-player">
+                    <div class="stat-stack"><span class="stat-label">ATK</span><span id="player-atk">10</span></div>
+                    <div class="stat-stack"><span class="stat-label">DEF</span><span id="player-def">5</span></div>
+                    <div class="stat-stack"><span class="stat-label">CRIT</span><span id="player-crit">0%</span></div>
+                    <div class="stat-stack"><span class="stat-label">DODG</span><span id="player-dodge">5</span></div>
+                    <div class="stat-stack"><span class="stat-label">AIM</span><span id="player-aim">0</span></div>
+                </div>
+                <div class="skills-readout" id="player-skills"></div>
+            </div>
+
+            <div class="arena-center-hud">
+                <div class="arena-round">
+                    <div class="arena-round-main">ROUND <span id="current-level" class="golden-text">1</span></div>
+                    <div class="arena-round-divider" aria-hidden="true"></div>
+                    <div class="arena-round-turn">TURN <span id="current-turn" class="golden-text">0</span></div>
+                </div>
+            </div>
+
+            <div class="entity-info" id="enemy-info">
+                <h2 class="entity-name" id="enemy-name">Slime</h2>
+                <div class="hp-bar-container" id="enemy-hp-container">
+                    <div class="hp-bar enemy-bar" id="enemy-hp-bar"></div>
+                    <span class="hp-text" id="enemy-hp-text">50 / 50</span>
+                </div>
+                <div id="enemy-stats-panel" class="stats-panel golden-text stats-panel-compact stats-panel-enemy">
+                    <div class="stat-stack"><span class="stat-label">ATK</span><span id="enemy-atk">5</span></div>
+                    <div class="stat-stack"><span class="stat-label">DEF</span><span id="enemy-def">2</span></div>
+                    <div class="stat-stack"><span class="stat-label">CRIT</span><span id="enemy-crit">0%</span></div>
+                    <div class="stat-stack"><span class="stat-label">DODG</span><span id="enemy-dodge">0</span></div>
+                    <div class="stat-stack"><span class="stat-label">AIM</span><span id="enemy-aim">0</span></div>
+                </div>
+            </div>
+        </div>
+
+        <main class="battle-arena">
+            <div class="arena-static-layer" aria-hidden="true"></div>
+            <div class="arena-black-layer" aria-hidden="true"></div>
+            <div class="arena-top-black-bar" aria-hidden="true"></div>
+            <div class="arena-bottom-black-bar" aria-hidden="true"></div>
+
+            <div class="arena-actors">
+                <div class="entity-card" id="player-card">
+                    <div class="avatar-container avatar-container-relative">
+                        <div class="fct-container" id="player-fct"></div>
+                        <img id="player-avatar" class="pixel-avatar face-right" src="entity/player_class/wanderer/wanderer_images/attack.png" alt="Player">
+                    </div>
+                </div>
+
+                <div class="entity-card" id="enemy-card">
+                    <div class="avatar-container avatar-container-relative">
+                        <div class="fct-container" id="enemy-fct"></div>
+                        <img id="enemy-avatar" class="pixel-avatar face-left" src="entity/enemy_class/slime/slime_images/slime.png" alt="Enemy">
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <section class="bottom-panel">
+            <div class="inventory-section inventory-section-main">
+                <div class="skills-quick-row">
+                    <button id="skill-tree-btn" class="skills-thin-btn" title="Open Skill Tree">Skills</button>
+                    <button id="cheat-btn" class="skills-thin-btn" title="Open Cheat Panel">Cheat</button>
+                </div>
+                <div id="exp-shake-wrap" class="exp-shake-wrap-spaced">
+                    <div id="player-exp-container" class="player-exp-container">
+                        <div id="player-exp-bar" class="player-exp-bar"></div>
+                        <div class="exp-grid-overlay">
+                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
+                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
+                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
+                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
+                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
+                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
+                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
+                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
+                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
+                            <div></div>
+                        </div>
+                        <div id="player-exp-text" class="player-exp-text">0 / 60</div>
+                    </div>
+                </div>
+                <div class="inventory-container inventory-container-main">
+                    <div class="inventory-grid gear-grid" id="gear-grid"></div>
+                    <div class="inventory-grid consumable-grid" id="inventory-grid"></div>
+                </div>
+            </div>
+        </section>
+
+        <div id="overlay" class="hidden">
+            <div class="modal ornate-border end-modal">
+                <h2 id="modal-title" class="themed-title">The End</h2>
+                <p id="modal-desc">You have fallen in battle.</p>
+                <button id="modal-btn" class="rpg-btn">Rise Again</button>
+            </div>
+        </div>
+
+        <div id="loot-overlay" class="hidden">
+            <div class="loot-modal">
+                <button id="loot-leave-btn" class="loot-close-btn" aria-label="Leave reward window">Leave</button>
+                <h2 class="themed-title">Choose a Reward</h2>
+                <div class="loot-options" id="loot-options"></div>
+            </div>
+        </div>
+
+        <div id="pause-overlay" class="hidden">
+            <div class="pause-modal">
+                <h2 class="golden-text">Paused</h2>
+                <button id="pause-resume-btn" class="rpg-btn">Resume</button>
+            </div>
+        </div>
+
+        <div id="levelup-overlay" class="hidden overlay-levelup">
+            <div class="modal ornate-border themed-window modal-center-text">
+                <h2 class="themed-title">Level Up!</h2>
+                <p id="levelup-desc" class="themed-body">You have reached Level 2!</p>
+                <button id="levelup-close-btn" class="tutorial-btn themed-btn">Continue</button>
+            </div>
+        </div>
+
+        <div id="skill-tree-overlay" class="hidden overlay-skilltree">
+            <div class="skill-tree-modal themed-window ornate-border">
+                <div class="skill-tree-header">
+                    <h2 class="themed-title">Wanderer</h2>
+                    <button id="skill-tree-close-btn" class="skill-tree-close-icon" aria-label="Close skill tree">x</button>
+                </div>
+                <div id="skill-tree-status" class="skill-tree-status">Level 1/20 | Total spent: 0 | Points: 0</div>
+                <div class="skill-tree-portrait-wrap">
+                    <div id="skill-tree-portrait" class="skill-tree-portrait"></div>
+                    <div class="skill-tree-circle-fade"></div>
+                    <div class="skill-tree-portrait-fade"></div>
+                    <div class="skill-tree-lantern-glow"></div>
+                </div>
+                <div id="skill-tree-sections" class="skill-tree-sections"></div>
+                <div id="skill-tree-tooltip" class="skill-tree-tooltip hidden"></div>
+            </div>
+        </div>
+
+        <div id="cheat-overlay" class="hidden overlay-cheat">
+            <div class="cheat-modal themed-window ornate-border">
+                <div class="skill-tree-header">
+                    <h2 class="themed-title">Cheat</h2>
+                    <button id="cheat-close-btn" class="skill-tree-close-icon" aria-label="Close cheat panel">x</button>
+                </div>
+                <div class="cheat-grid">
+                    <label>HP <input id="cheat-hp" type="number" min="1" step="1"></label>
+                    <label>Max HP <input id="cheat-maxhp" type="number" min="1" step="1"></label>
+                    <label>ATK <input id="cheat-atk" type="number" min="0" step="1"></label>
+                    <label>DEF <input id="cheat-def" type="number" min="0" step="1"></label>
+                    <label>CRIT % <input id="cheat-crit" type="number" min="0" step="1"></label>
+                    <label>DODGE <input id="cheat-dodge" type="number" min="0" step="1"></label>
+                    <label>AIM <input id="cheat-aim" type="number" min="0" step="1"></label>
+                </div>
+                <div class="cheat-toggle-row">
+                    <label class="cheat-toggle-label"><input id="cheat-godmode" type="checkbox"> God Mode (No damage taken)</label>
+                    <label class="cheat-toggle-label"><input id="cheat-reverse-skill" type="checkbox"> Allow reverse skill point (right-click skill node)</label>
+                </div>
+                <div class="cheat-actions">
+                    <button id="cheat-save-btn" class="tutorial-btn themed-btn">Save</button>
+                    <button id="cheat-reset-btn" class="tutorial-btn themed-btn">Reset Class Default</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="class-overlay" class="hidden">
+            <div class="themed-window class-window class-window-wide">
+                <h2 class="themed-title">Choose a Servant</h2>
+                <div class="class-options class-options-layout" id="class-options">
+                    <!-- Classes will be injected here -->
+                </div>
+                <button id="confirm-class-btn" class="tutorial-btn themed-btn confirm-class-btn-top">Descent</button>
+            </div>
+        </div>
+
+        <div id="tutorial-overlay" class="hidden">
+            <div class="tutorial-container">
+                <div class="tutorial-window ornate-border">
+                    <div class="tutorial-content">
+                        <h3>Gate Keeper</h3>
+                        <p id="dialogue-text">
+                            Welcome, outsider. You look nervous - that's normal. This dungeon is cruel, and most who enter never return. But don't worry, <span class="guide-highlight">your servant will do their part in battle</span>. What matters is you: your choices, what you keep, and what you give up.
+                            <br><br>
+                            Now descent into the darkness, and seek your secret...
+                        </p>
+                        <button id="start-journey-btn" class="tutorial-btn">Descent</button>
+                    </div>
+                    <div class="tutorial-static-layer" aria-hidden="true"></div>
+                    <div class="tutorial-fade-layer" aria-hidden="true"></div>
+                    <div class="tutorial-art-layer" aria-hidden="true"></div>
+                    <div class="tutorial-art-glitch-layer" aria-hidden="true"></div>
+                </div>
+            </div>
+        </div>
+        <div id="info-tooltip" class="info-tooltip hidden"></div>
+    </div>
+</body>
+
+</html>
+
+

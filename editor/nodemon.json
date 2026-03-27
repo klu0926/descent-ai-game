@@ -1,0 +1,9 @@
+﻿{
+  "watch": [
+    "server.js",
+    "../entity/enemy_class"
+  ],
+  "ext": "js,json",
+  "exec": "node server.js --no-watch",
+  "delay": "120"
+}
