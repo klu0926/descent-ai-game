@@ -15,6 +15,10 @@ import {
 } from "./combatFlow.js";
 
 export function createCombatBindings(ctx) {
+    function waitMs(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
     function applyEnemyTurnDots() {
         return applyEnemyTurnDotsFlow({
             currentGameStats: ctx.currentGameStats,
@@ -73,6 +77,7 @@ export function createCombatBindings(ctx) {
     function applySkillTreeTurnEffects() {
         return applySkillTreeTurnEffectsFlow({
             currentGameStats: ctx.currentGameStats,
+            levelManager: ctx.levelManager,
             playerInfo: ctx.playerInfo,
             getSkillRank: ctx.getSkillRank,
             canTriggerTurnSkill: ctx.canTriggerTurnSkill,
@@ -242,8 +247,42 @@ export function createCombatBindings(ctx) {
         gameLoop.start();
     }
 
-    function spawnEnemy(level) {
-        ctx.currentGameStats.currentEnemy = ctx.createEnemy(level);
+    async function animateEnemyEntrance() {
+        const enemyCard = ctx.uiEnemyCard;
+        if (!enemyCard) return;
+        enemyCard.classList.remove("enemy-entering");
+        void enemyCard.offsetWidth;
+        enemyCard.classList.add("enemy-entering");
+        await Promise.race([
+            new Promise(resolve => enemyCard.addEventListener("animationend", resolve, { once: true })),
+            waitMs(460)
+        ]);
+        enemyCard.classList.remove("enemy-entering");
+    }
+
+    async function runRoundTransition(midpoint) {
+        const overlay = ctx.roundTransitionOverlay;
+        if (!overlay) {
+            await midpoint();
+            return;
+        }
+        overlay.classList.add("is-active");
+        await waitMs(430);
+        await midpoint();
+        overlay.classList.remove("is-active");
+        await waitMs(430);
+    }
+
+    async function spawnEnemy(level, round) {
+        const enemyLevel = Number.isFinite(Number(round)) ? Math.max(1, Math.trunc(Number(round))) : Math.max(1, Math.trunc(Number(level) || 1));
+        const configuredEnemyId = typeof ctx.getRoundEnemyId === "function"
+            ? ctx.getRoundEnemyId(level, round)
+            : null;
+        if (configuredEnemyId && typeof ctx.createEnemyFromId === "function") {
+            ctx.currentGameStats.currentEnemy = ctx.createEnemyFromId(configuredEnemyId, enemyLevel);
+        } else {
+            ctx.currentGameStats.currentEnemy = ctx.createEnemy(enemyLevel);
+        }
         if (typeof ctx.syncEffectState === "function") ctx.syncEffectState();
         ctx.showEnemyDisplay();
         ctx.uiEnemyName.innerText = ctx.currentGameStats.currentEnemy.name;
@@ -251,10 +290,34 @@ export function createCombatBindings(ctx) {
         ctx.uiEnemyAvatar.removeAttribute("title");
         ctx.applyEnemySize(ctx.currentGameStats.currentEnemy.size);
         ctx.updateEnemyUI();
+        await animateEnemyEntrance();
     }
 
-    function startLevel(level) {
-        ctx.currentGameStats.currentLevel = level;
+    async function beginRoundEncounter(level, round) {
+        await spawnEnemy(level, round);
+        ctx.updatePlayerUI();
+        ctx.currentGameStats.isPlayerTurn = true;
+        ctx.gameEventBus.emit(ctx.GAME_EVENTS.LEVEL_STARTED, {
+            level: ctx.currentGameStats.currentLevel,
+            round: ctx.currentGameStats.currentRound
+        });
+        startBattleLoop();
+    }
+
+    async function startLevel(level, round = 1) {
+        const nextLevel = Number.isFinite(Number(level)) ? Math.max(1, Math.trunc(Number(level))) : 1;
+        const nextRound = Number.isFinite(Number(round)) ? Math.max(1, Math.trunc(Number(round))) : 1;
+        const isFirstRound = nextRound === 1;
+        if (ctx.levelManager && typeof ctx.levelManager.setProgress === "function") {
+            ctx.levelManager.setProgress({ level: nextLevel, round: nextRound, turn: 0 });
+            if (typeof ctx.levelManager.syncToCurrentGame === "function") {
+                ctx.levelManager.syncToCurrentGame(ctx.currentGameStats);
+            }
+        } else {
+            ctx.currentGameStats.currentLevel = nextLevel;
+            ctx.currentGameStats.currentRound = nextRound;
+            ctx.currentGameStats.currentTurn = 0;
+        }
         ctx.currentGameStats.battleState.survivalUsed = false;
         ctx.currentGameStats.battleState.turnCount = 0;
         ctx.currentGameStats.battleState.currentTurnNumber = 0;
@@ -269,14 +332,56 @@ export function createCombatBindings(ctx) {
         ctx.currentGameStats.battleState.relentlessCounterCooldown = 0;
         ctx.currentGameStats.battleState.potionAtkBuffTurns = 0;
         ctx.currentGameStats.battleState.healingScrollRegenTurns = 0;
+        if (ctx.levelManager && typeof ctx.levelManager.setTurn === "function") {
+            ctx.levelManager.setTurn(0);
+            if (typeof ctx.levelManager.syncToCurrentGame === "function") {
+                ctx.levelManager.syncToCurrentGame(ctx.currentGameStats);
+            }
+        } else {
+            ctx.currentGameStats.currentTurn = 0;
+        }
         if (typeof ctx.syncEffectState === "function") ctx.syncEffectState();
-        ctx.uiLevelDisplay.innerText = ctx.currentGameStats.currentLevel;
-        if (ctx.uiTurnDisplay) ctx.uiTurnDisplay.innerText = "0";
-        spawnEnemy(level);
-        ctx.updatePlayerUI();
-        ctx.currentGameStats.isPlayerTurn = true;
-        ctx.gameEventBus.emit(ctx.GAME_EVENTS.LEVEL_STARTED, { level: ctx.currentGameStats.currentLevel });
-        startBattleLoop();
+        const displayedRound = typeof ctx.currentGameStats.currentRound === "number"
+            ? ctx.currentGameStats.currentRound
+            : ctx.currentGameStats.currentLevel;
+        ctx.uiLevelDisplay.innerText = displayedRound;
+        if (ctx.uiTurnDisplay) ctx.uiTurnDisplay.innerText = `${ctx.currentGameStats.currentTurn || 0}`;
+        const roundBackgroundPath = typeof ctx.getRoundBackgroundPath === "function"
+            ? ctx.getRoundBackgroundPath(ctx.currentGameStats.currentLevel, ctx.currentGameStats.currentRound)
+            : "";
+        if (typeof ctx.setBattleArenaBackground === "function") {
+            if (isFirstRound) {
+                ctx.setBattleArenaBackground(roundBackgroundPath);
+            } else {
+                await runRoundTransition(async () => {
+                    ctx.setBattleArenaBackground(roundBackgroundPath);
+                });
+            }
+        }
+        if (typeof ctx.setArenaLevelWarning === "function") {
+            const warningText = typeof ctx.getRoundLevelObjectWarning === "function"
+                ? ctx.getRoundLevelObjectWarning(ctx.currentGameStats.currentLevel, ctx.currentGameStats.currentRound)
+                : "";
+            ctx.setArenaLevelWarning(warningText);
+        }
+        if (ctx.roundStartBtn) {
+            ctx.roundStartBtn.classList.add("hidden");
+            ctx.roundStartBtn.disabled = false;
+            ctx.roundStartBtn.onclick = null;
+        }
+        if (isFirstRound && ctx.roundStartBtn) {
+            ctx.clearEnemyDisplay();
+            ctx.roundStartBtn.classList.remove("hidden");
+            ctx.roundStartBtn.disabled = false;
+            ctx.roundStartBtn.onclick = async () => {
+                ctx.roundStartBtn.disabled = true;
+                ctx.roundStartBtn.classList.add("hidden");
+                await beginRoundEncounter(ctx.currentGameStats.currentLevel, ctx.currentGameStats.currentRound);
+            };
+            ctx.updatePlayerUI();
+            return;
+        }
+        await beginRoundEncounter(ctx.currentGameStats.currentLevel, ctx.currentGameStats.currentRound);
     }
 
     const gameLoop = createBattleGameLoop({

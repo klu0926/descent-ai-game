@@ -2,7 +2,7 @@ export const ASSASSIN_ENEMY = {
     name: "Assassin",
     img: "entity/enemy_class/assassin/assassin_images/assassin.png",
     type: "rogue",
-    size: "m",
+    size: "l",
     levels: ["all"],
     hp: 34,
     atk: 13,

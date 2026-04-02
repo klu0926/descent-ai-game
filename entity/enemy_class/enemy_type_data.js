@@ -13,10 +13,11 @@ export const ENEMY_SIZE_TO_PX = {
     s: 150,
     m: 220,
     l: 300,
-    xl: 400
+    xl: 400,
+    "2xl": 600
 };
 
-export const ENEMY_SIZE_OPTIONS = ["s", "m", "l", "xl"];
+export const ENEMY_SIZE_OPTIONS = ["s", "m", "l", "xl", "2xl"];
 
 export const ENEMY_LEVEL_OPTIONS = [
     "all",

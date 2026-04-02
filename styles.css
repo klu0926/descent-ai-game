@@ -19,6 +19,7 @@
     --button-shadow: 0 4px 6px rgba(0, 0, 0, 0.8);
     --hp-gradient: linear-gradient(to bottom, #9a2f2f, #4b0f0f);
     --enemy-hp-gradient: linear-gradient(to bottom, #9a2f2f, #4b0f0f);
+    --arena-bg-image: url("level/level_background/level_1/level_1_gate.png");
 }
 
 * {
@@ -129,13 +130,11 @@ h3 {
     left: -20px;
     right: -20px;
     bottom: -20px;
-    background: url('resources/images/arena/background3.png') center/cover no-repeat;
-    background-position: 50% -61px;
+    background: var(--arena-bg-image) center center / contain no-repeat;
     mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 90%);
     -webkit-mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 90%);
     z-index: -1;
     pointer-events: none;
-    animation: arenaBgDrift 1.2s ease-in-out infinite alternate;
 }
 
 .battle-arena::after {
@@ -217,6 +216,20 @@ h3 {
     z-index: 55;
 }
 
+.round-transition-overlay {
+    position: absolute;
+    inset: -20px;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 90;
+    transition: opacity 420ms ease;
+}
+
+.round-transition-overlay.is-active {
+    opacity: 1;
+}
+
 .arena-hud {
     position: absolute;
     top: 15px;
@@ -241,6 +254,24 @@ h3 {
     margin-bottom: 0;
 }
 
+.arena-level-warning {
+    position: absolute;
+    top: 106px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 62;
+    padding: 4px 10px;
+    border: 1px solid rgba(220, 72, 72, 0.9);
+    border-radius: 4px;
+    background: rgba(32, 2, 4, 0.8);
+    color: #ffd5d5;
+    font-size: 0.82rem;
+    line-height: 1;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+}
+
 .arena-center-hud {
     display: flex;
     flex-direction: column;
@@ -250,6 +281,37 @@ h3 {
     min-width: 120px;
     padding-top: 36px;
     margin-top: -20px;
+}
+
+.arena-start-btn {
+    position: absolute;
+    left: 50%;
+    top: 52%;
+    transform: translate(-50%, -50%);
+    z-index: 95;
+    pointer-events: auto;
+    min-width: 210px;
+    padding: 14px 24px;
+    border: 1px solid rgba(243, 212, 158, 0.85);
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(112, 82, 42, 0.95) 0%, rgba(40, 25, 12, 0.95) 100%);
+    color: #f9e5bc;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    box-shadow: 0 0 0 1px rgba(70, 48, 24, 0.95), 0 14px 30px rgba(0, 0, 0, 0.62), 0 0 22px rgba(243, 212, 158, 0.24);
+    transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+    animation: arenaStartButtonPulse 1.3s ease-in-out infinite;
+}
+
+.arena-start-btn:hover {
+    transform: translate(-50%, -52%);
+    filter: brightness(1.07);
+    box-shadow: 0 0 0 1px rgba(90, 62, 30, 0.98), 0 18px 34px rgba(0, 0, 0, 0.66), 0 0 26px rgba(243, 212, 158, 0.3);
+}
+
+.arena-start-btn:active {
+    transform: translate(-50%, -49%);
 }
 
 .arena-round {
@@ -311,6 +373,10 @@ h3 {
 
 #enemy-card {
     transform: translateX(-60px);
+}
+
+#enemy-card.enemy-entering {
+    animation: enemyEnterFromRight 420ms ease-out;
 }
 
 .entity-info {
@@ -1095,6 +1161,119 @@ h3 {
     justify-content: center;
     align-items: center;
     z-index: 100;
+}
+
+#intro-cinematic-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    z-index: 3200;
+    overflow: hidden;
+    opacity: 1;
+    transition: opacity 700ms ease;
+}
+
+#intro-cinematic-overlay.intro-cinematic-fadeout {
+    opacity: 0;
+}
+
+.intro-cinematic-video,
+.intro-cinematic-static-layer,
+.intro-cinematic-black,
+.intro-cinematic-frame-fade,
+.video-black-fade-circle {
+    position: absolute;
+    inset: 0;
+}
+
+.intro-cinematic-video {
+    width: min(100vw, 1100px);
+    height: auto;
+    max-height: 100vh;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 320ms ease;
+    pointer-events: none;
+    z-index: 1;
+}
+
+#intro-cinematic-overlay.intro-cinematic-show-video .intro-cinematic-video {
+    opacity: 1;
+}
+
+.intro-cinematic-static-layer {
+    width: min(100vw, 1100px);
+    height: min(100vh, calc(min(100vw, 1100px) * 9 / 16));
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    opacity: 0.1;
+    background-image: url("resources/images/hud-effect/static.jpg");
+    background-repeat: repeat;
+    background-size: 1500px 1500px;
+    mix-blend-mode: normal;
+    animation: arenaStaticShift 0.09s steps(2, end) infinite;
+    z-index: 2;
+}
+
+.intro-cinematic-black {
+    width: 100%;
+    height: 100%;
+    background:
+        radial-gradient(
+            ellipse at center,
+            rgba(0, 0, 0, 0) 46%,
+            rgba(0, 0, 0, 0.28) 66%,
+            rgba(0, 0, 0, 0.78) 86%,
+            rgba(0, 0, 0, 1) 100%
+        );
+    opacity: 1;
+    transition: opacity 700ms ease;
+    pointer-events: none;
+    z-index: 3;
+}
+
+#intro-cinematic-overlay.intro-cinematic-show-black .intro-cinematic-black {
+    opacity: 1;
+}
+
+.intro-cinematic-frame-fade {
+    inset: 0;
+    border-radius: 0;
+    pointer-events: none;
+    background: radial-gradient(
+        circle at center,
+        rgba(0, 0, 0, 0) 42%,
+        rgba(0, 0, 0, 0.32) 62%,
+        rgba(0, 0, 0, 0.8) 82%,
+        rgba(0, 0, 0, 1) 100%
+    );
+    opacity: 1;
+    z-index: 4;
+}
+
+.video-black-fade-circle {
+    inset: auto;
+    width: min(100vw, 1100px);
+    height: 100vh;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    background: radial-gradient(
+        circle at center,
+        rgba(0, 0, 0, 0) 24%,
+        rgba(0, 0, 0, 0.52) 48%,
+        rgba(0, 0, 0, 0.9) 72%,
+        rgba(0, 0, 0, 1) 100%
+    );
+    z-index: 5;
 }
 
 #tutorial-overlay {
@@ -2033,8 +2212,10 @@ h3 {
 }
 
 .tutorial-btn {
-    display: block;
-    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 0;
     margin-top: auto;
     padding: 12px 24px;
     font-size: 1.12rem;
@@ -2050,6 +2231,20 @@ h3 {
     background: #181818;
     border-color: #6a5233;
     box-shadow: 0 0 14px rgba(245, 220, 122, 0.45), 0 0 28px rgba(245, 220, 122, 0.2);
+}
+
+.tutorial-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: auto;
+}
+
+.tutorial-btn-secondary {
+    border-color: rgba(106, 82, 51, 0.75);
+    color: rgba(245, 226, 191, 0.95);
+    background: #141414;
 }
 
 .themed-window {
@@ -2140,13 +2335,13 @@ h3 {
 
 /* Top Controls Wrapper */
 .top-controls {
-    position: absolute;
+    position: fixed;
     top: 15px;
     right: 20px;
     display: flex;
     flex-direction: column;
     gap: 5px;
-    z-index: 3100;
+    z-index: 5000;
 }
 
 .btn-editor-square {
@@ -3086,6 +3281,28 @@ h3 {
     }
 }
 
+@keyframes enemyEnterFromRight {
+    0% {
+        transform: translateX(220px);
+        opacity: 0.25;
+    }
+
+    100% {
+        transform: translateX(-60px);
+        opacity: 1;
+    }
+}
+
+@keyframes arenaStartButtonPulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 1px rgba(70, 48, 24, 0.95), 0 14px 30px rgba(0, 0, 0, 0.62), 0 0 16px rgba(243, 212, 158, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 0 1px rgba(86, 60, 30, 0.98), 0 18px 34px rgba(0, 0, 0, 0.66), 0 0 28px rgba(243, 212, 158, 0.34);
+    }
+}
+
 @keyframes deserterSkullPulse {
     0% {
         transform: translate(-50%, -52%) scale(0.82);
@@ -3132,6 +3349,11 @@ h3 {
 
     .arena-hud {
         padding: 0 10px;
+    }
+
+    .arena-level-warning {
+        top: 96px;
+        font-size: 0.76rem;
     }
 
     .entity-card {

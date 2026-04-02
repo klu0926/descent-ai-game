@@ -2,7 +2,7 @@ export const SLIME_ENEMY = {
     name: "Slime",
     img: "entity/enemy_class/slime/slime_images/slime.png",
     type: "monster",
-    size: "s",
+    size: "xl",
     levels: ["all"],
     hp: 40,
     atk: 5,

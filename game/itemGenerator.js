@@ -1,13 +1,37 @@
-﻿import {
-    ACCESSORY_TYPES,
-    ARMOR_TYPES,
-    PREFIXES,
-    RARITIES,
-    SUFFIXES,
-    WEAPON_TYPES
-} from "../data/data.js";
-import { PASSIVES } from "../skills/passive_runtime.js";
+﻿import { PASSIVES } from "../skills/passive_runtime.js";
 import { GearItem, HealingRewardItem } from "../items/item.js";
+
+const WEAPON_TYPES = [
+    { name: "Sword", stat: "atk", val: 8, icon: "⚔️" },
+    { name: "Dagger", stat: "atk", val: 5, icon: "🗡️" },
+    { name: "Bow", stat: "atk", val: 6, icon: "🏹" },
+    { name: "Staff", stat: "atk", val: 10, icon: "🦯" }
+];
+
+const ARMOR_TYPES = [
+    { name: "Plate Mail", stat: "def", val: 10, icon: "🦺" },
+    { name: "Leather", stat: "def", val: 4, icon: "🧥" },
+    { name: "Helmet", stat: "def", val: 5, icon: "🪖" },
+    { name: "Boots", stat: "def", val: 3, icon: "👢" }
+];
+
+const ACCESSORY_TYPES = [
+    { name: "Ring", stat: "hp", val: 15, icon: "💍" },
+    { name: "Amulet", stat: "atk", val: 4, icon: "📿" },
+    { name: "Charm", stat: "def", val: 3, icon: "🔮" },
+    { name: "Crystal", stat: "hp", val: 25, icon: "💎" }
+];
+
+const RARITIES = [
+    { id: "common", name: "Common", weight: 50, extraStats: 0, passiveChance: 0 },
+    { id: "uncommon", name: "Uncommon", weight: 30, extraStats: 1, passiveChance: 0 },
+    { id: "rare", name: "Rare", weight: 15, extraStats: 2, passiveChance: 0.4 },
+    { id: "epic", name: "Epic", weight: 4, extraStats: 2, passiveChance: 0.8 },
+    { id: "legendary", name: "Legendary", weight: 1, extraStats: 3, passiveChance: 1.0 }
+];
+
+const PREFIXES = ["Flaming", "Frozen", "Cursed", "Blessed", "Ancient", "Rusty", "Shining", "Shadow", "Divine"];
+const SUFFIXES = ["of the Bear", "of Speed", "of the Eagle", "of Doom", "of Light", "of Darkness", "of Fire", "of Ice", "of the Dragon"];
 
 export const ITEM_GENERATOR_CONFIG = {
     categories: [
@@ -183,5 +207,6 @@ export function generateLootOptions(level) {
 
     return options;
 }
+
 
 

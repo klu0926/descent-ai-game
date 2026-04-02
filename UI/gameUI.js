@@ -20,11 +20,15 @@ export function createUIRefs() {
         uiEnemyDodge: document.getElementById("enemy-dodge"),
         uiEnemyAim: document.getElementById("enemy-aim"),
         uiEnemyAvatar: document.getElementById("enemy-avatar"),
+        uiEnemyCard: document.getElementById("enemy-card"),
         uiEnemyInfo: document.getElementById("enemy-info"),
         uiEnemyHpContainer: document.getElementById("enemy-hp-container"),
         uiEnemyStatsPanel: document.getElementById("enemy-stats-panel"),
         uiLevelDisplay: document.getElementById("current-level"),
         uiTurnDisplay: document.getElementById("current-turn"),
+        uiArenaLevelWarning: document.getElementById("arena-level-warning"),
+        roundStartBtn: document.getElementById("round-start-btn"),
+        roundTransitionOverlay: document.getElementById("round-transition-overlay"),
         overlay: document.getElementById("overlay"),
         modalBtn: document.getElementById("modal-btn"),
         lootOverlay: document.getElementById("loot-overlay"),
@@ -32,10 +36,12 @@ export function createUIRefs() {
         lootLeaveBtn: document.getElementById("loot-leave-btn"),
         tutorialOverlay: document.getElementById("tutorial-overlay"),
         pauseOverlay: document.getElementById("pause-overlay"),
+        playVoiceBtn: document.getElementById("play-voice-btn"),
         startJourneyBtn: document.getElementById("start-journey-btn"),
         eqReadout: document.getElementById("eq-readout"),
         infoTooltip: document.getElementById("info-tooltip"),
         bgMusic: document.getElementById("bg-music"),
+        gatekeeperVoiceAudio: document.getElementById("gatekeeper-voice"),
         musicBtn: document.getElementById("music-toggle-btn"),
         pauseBtn: document.getElementById("pause-toggle-btn"),
         skillTreeBtn: document.getElementById("skill-tree-btn"),
@@ -69,7 +75,9 @@ export function createUIRefs() {
         cheatReverseSkillInput: document.getElementById("cheat-reverse-skill"),
         classOverlay: document.getElementById("class-overlay"),
         classOptions: document.getElementById("class-options"),
-        confirmClassBtn: document.getElementById("confirm-class-btn")
+        confirmClassBtn: document.getElementById("confirm-class-btn"),
+        introCinematicOverlay: document.getElementById("intro-cinematic-overlay"),
+        introCinematicVideo: document.getElementById("intro-cinematic-video")
     };
 }
 
@@ -191,6 +199,25 @@ export function triggerCritFlash() {
     setTimeout(() => {
         if (inventorySplit) inventorySplit.classList.remove("anim-shake");
     }, 250);
+}
+
+export function setBattleArenaBackground(imagePath) {
+    const battleArena = document.querySelector(".battle-arena");
+    if (!battleArena) return;
+    const normalized = typeof imagePath === "string" ? imagePath.trim() : "";
+    if (!normalized) {
+        battleArena.style.removeProperty("--arena-bg-image");
+        return;
+    }
+    const escapedPath = normalized.replace(/"/g, '\\"');
+    battleArena.style.setProperty("--arena-bg-image", `url("${escapedPath}")`);
+}
+
+export function setArenaLevelWarning({ element, message }) {
+    if (!element) return;
+    const text = typeof message === "string" ? message.trim() : "";
+    element.innerText = text;
+    element.classList.toggle("hidden", !text);
 }
 
 export function updateExpUI({ uiPlayerExpBar, uiPlayerExpText, uiPlayerName, playerInfo, currentGameStats, classes, getPlayerExpPercent }) {
@@ -460,6 +487,24 @@ export function showPassiveInfo({ passive, eqReadout }) {
 
 export function showItemInfo({ item, isConsumable = false, gearSlotKey = "", gearSlotLabels, formatStats, consumableEffectNotes = [] }) {
     if (!item) return "";
+    const itemName = item.name || "Unnamed Item";
+    const itemRarity = item.rarity || "common";
+    const healAmount = Number(item.healAmount);
+    const healPercent = Number(item.healPercent);
+    const classEffectParts = [];
+    if (Number.isFinite(healAmount) && healAmount > 0) classEffectParts.push(`Healing +${Math.floor(healAmount)} HP`);
+    if (Number.isFinite(healPercent) && healPercent > 0) classEffectParts.push(`Healing ${Math.floor(healPercent * 100)}%`);
+    const effectMode = String(item.effectMode || "").trim().toLowerCase();
+    if (effectMode === "turn") {
+        const turns = Math.max(1, Math.floor(Number(item.effectTurns) || 1));
+        classEffectParts.push(`${turns} turn${turns > 1 ? "s" : ""}`);
+    } else if (effectMode === "round") {
+        const rounds = Math.max(1, Math.floor(Number(item.effectRounds) || 1));
+        classEffectParts.push(`${rounds} round${rounds > 1 ? "s" : ""}`);
+    } else if (effectMode === "once") {
+        classEffectParts.push("Once");
+    }
+    const classEffectText = classEffectParts.join(" | ");
     const useHint = item.rewardType === "consumable"
         ? `<div style="margin-top: 8px; color: var(--text-highlight); font-size: 0.95rem;">Right-click this item to drink.</div>`
         : "";
@@ -474,10 +519,11 @@ export function showItemInfo({ item, isConsumable = false, gearSlotKey = "", gea
         return `<div class="slot-item-desc" style="color: ${color}; font-size: 0.95rem; line-height: 1.35; margin-top: 6px;">${source}${entry.text}</div>`;
     }).join("");
     return `
-        <div class="slot-item-name rarity-${item.rarity}" style="font-size: 1.2rem; border-bottom: 1px solid var(--border-gold-dim); padding-bottom: 5px; margin-bottom: 8px;">${item.displayName}</div>
+        <div class="slot-item-name rarity-${itemRarity}" style="font-size: 1.2rem; border-bottom: 1px solid var(--border-gold-dim); padding-bottom: 5px; margin-bottom: 8px;">${itemName}</div>
         <div class="slot-item-stats" style="font-size: 1.1rem; color: var(--text-green); font-weight: bold; margin-bottom: 8px;">${formatStats(item.stats)}</div>
         <div class="slot-item-desc" style="color: #ffffff; font-size: 1rem; line-height: 1.4;">${item.storyDesc || item.desc}</div>
-        ${item.functionDesc ? `<div class="slot-item-stats" style="font-size: 1.05rem; color: var(--text-green); font-weight: bold; margin-top: 6px;">${item.functionDesc}</div>` : ""}
+        ${classEffectText ? `<div class="slot-item-stats" style="font-size: 1.05rem; color: var(--text-green); font-weight: bold; margin-top: 6px;">${classEffectText}</div>` : ""}
+        ${!classEffectText && item.functionDesc ? `<div class="slot-item-stats" style="font-size: 1.05rem; color: var(--text-green); font-weight: bold; margin-top: 6px;">${item.functionDesc}</div>` : ""}
         ${effectNotesHtml}
         ${slotHint}
         ${useHint}
@@ -535,7 +581,7 @@ export function renderEquipment({
         slot.className = "grid-item";
         slot.dataset.slot = slotKey;
         if (item) {
-            slot.classList.add(`rarity-border-${item.rarity}`);
+            slot.classList.add(`rarity-border-${item.rarity || "common"}`);
             slot.classList.remove("gear-slot-empty");
             slot.style.removeProperty("--gear-slot-icon");
             renderItemVisualIntoSlot(slot, item);
@@ -581,7 +627,7 @@ export function renderEquipment({
         const slot = document.createElement("div");
         slot.className = "grid-item";
         if (item) {
-            slot.classList.add(`rarity-border-${item.rarity}`);
+            slot.classList.add(`rarity-border-${item.rarity || "common"}`);
             renderItemVisualIntoSlot(slot, item);
             slot.onmouseover = event => {
                 showInfoTooltipFn(showItemInfoFn(item, true), event.clientX, event.clientY, "right", "above");

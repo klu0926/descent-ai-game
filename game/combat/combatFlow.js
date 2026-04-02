@@ -119,8 +119,16 @@ export function applySkillTreeTurnEffectsFlow(ctx) {
         battleState.enemyTurnCount += 1;
     }
     battleState.currentTurnNumber = battleState.turnCount;
+    if (ctx.levelManager && typeof ctx.levelManager.setTurn === "function") {
+        ctx.levelManager.setTurn(battleState.currentTurnNumber);
+        if (typeof ctx.levelManager.syncToCurrentGame === "function") {
+            ctx.levelManager.syncToCurrentGame(currentGameStats);
+        }
+    } else {
+        currentGameStats.currentTurn = battleState.currentTurnNumber;
+    }
 
-    if (ctx.uiTurnDisplay) ctx.uiTurnDisplay.innerText = `${battleState.currentTurnNumber}`;
+    if (ctx.uiTurnDisplay) ctx.uiTurnDisplay.innerText = `${currentGameStats.currentTurn}`;
 
     const fireRank = ctx.getSkillRank("fire_scroll");
     if (canTriggerTurnSkill("fire_scroll") && currentGameStats.currentEnemy && currentGameStats.currentEnemy.hp > 0 && fireRank > 0 && battleState.currentTurnNumber % 10 === 0) {
@@ -494,9 +502,11 @@ export function handleWinFlow(ctx) {
 export function advanceToNextRoundFlow(ctx) {
     if (ctx.presentScavengerPotionReward()) return;
     if (ctx.lootOverlay) ctx.lootOverlay.classList.add("hidden");
-    ctx.floatText("system", `Round ${ctx.currentGameStats.currentLevel + 1}`, "system");
+    const nextRound = (Number(ctx.currentGameStats.currentRound) || 1) + 1;
+    ctx.floatText("system", `Round ${nextRound}`, "system");
     setTimeout(() => {
-        ctx.startLevel(ctx.currentGameStats.currentLevel + 1);
+        const levelId = Number(ctx.currentGameStats.currentLevel) || 1;
+        ctx.startLevel(levelId, nextRound);
     }, 1000);
 }
 
@@ -507,7 +517,7 @@ export function handleLossFlow(ctx) {
     ctx.clearScreenSpaceEffects();
     ctx.floatText("player", "Defeated", "dmg");
     if (ctx.eqReadout) ctx.eqReadout.innerHTML = "";
-    document.getElementById("modal-desc").innerText = `Journey ended at Round ${ctx.currentGameStats.currentLevel}.`;
+    document.getElementById("modal-desc").innerText = `Journey ended at Round ${ctx.currentGameStats.currentRound}.`;
     ctx.overlay.classList.remove("hidden");
     ctx.playSound("hit");
 }

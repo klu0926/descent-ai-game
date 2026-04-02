@@ -4,23 +4,42 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Player Editor</title>
-    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./style.css?v=20260402a">
+    <script defer src="./player.js?v=20260402a"></script>
 </head>
 <body>
 <div class="wrap">
-    <div class="panel">
+    <div class="panel panel-top-nav">
         <nav class="top-nav" aria-label="Editor sections">
             <a class="top-nav-link is-active" href="/player.html">Player</a>
             <a class="top-nav-link" href="/enemy.html">Enemy</a>
             <a class="top-nav-link" href="/level.html">Level</a>
+            <a class="top-nav-link" href="/backgrounds.html">Background</a>
             <a class="top-nav-link" href="/items.html">Items</a>
         </nav>
     </div>
     <div class="panel">
         <h1>Player Editor</h1>
-        <div class="muted">This page is ready for player editing features.</div>
+        <div class="muted">Edit Wanderer class data in <code>entity/player_class/wanderer/wanderer_data.js</code>.</div>
+        <div id="player-status" class="muted mt8">Loading wanderer class data...</div>
+    </div>
+
+    <div class="panel panel-flex-col">
+        <h1 class="section-title">Class Panel</h1>
+        <div id="player-panel-list" class="enemy-panel-list"></div>
     </div>
 </div>
+
+<div id="image-processing-overlay" class="processing-overlay hidden" aria-hidden="true">
+    <div class="processing-overlay-card">
+        <div id="processing-overlay-text" class="processing-overlay-text">Processing image...</div>
+        <div class="processing-progress-track">
+            <div id="processing-progress-fill" class="processing-progress-fill"></div>
+        </div>
+        <div id="processing-progress-label" class="processing-progress-label">0%</div>
+    </div>
+</div>
+
 <script>
 (function () {
     const stream = new EventSource('/__live_reload');

@@ -1,0 +1,15 @@
+export const GUARD_ENEMY = {
+    name: "Guard",
+    img: "entity/enemy_class/guard/guard_images/guard.png",
+    type: "warrior",
+    size: "l",
+    levels: ["all"],
+    hp: 60,
+    atk: 10,
+    def: 4,
+    crit: 3,
+    dodge: 2,
+    aim: 4,
+    exp: 20,
+    desc: "A sturdy front-line bruiser with solid health and armor. Slow and direct, but hard to bring down in a straight fight.",
+};

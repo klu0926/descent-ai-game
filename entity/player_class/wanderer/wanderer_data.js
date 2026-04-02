@@ -98,27 +98,32 @@ class WandererClass {
         this.portrait = "entity/player_class/wanderer/wanderer_images/portrait.png";
         this.skillCardPortrait = "entity/player_class/wanderer/wanderer_images/portrait.png";
         this.sprites = {
-            attack: "entity/player_class/wanderer/wanderer_images/attack.png",
-            block: "entity/player_class/wanderer/wanderer_images/block.png"
-        };
+        "attack": "entity/player_class/wanderer/wanderer_images/attack.png",
+        "block": "entity/player_class/wanderer/wanderer_images/block.png"
+};
         this.description = "A hardened survivor who uses agility and instinct to outlast danger with <span class='class-keyword'>dodge</span>, <span class='class-keyword'>traps</span>, and <span class='class-keyword'>potions</span>, then strikes back with precision.";
         this.locked = false;
+        this.gold = 0;
+        this.inventory = [
+        "small_potion",
+        "body_rug"
+];
         this.baseStats = {
-            hp: 100,
-            atk: 10,
-            def: 5,
-            crit: 0,
-            dodge: 5,
-            aim: 0
-        };
+        "hp": 100,
+        "atk": 10,
+        "def": 5,
+        "crit": 0,
+        "dodge": 5,
+        "aim": 0
+};
         this.levelUpGrowth = {
-            hp: 10,
-            atk: 1,
-            def: 1,
-            crit: 0,
-            dodge: 1,
-            aim: 0
-        };
+        "hp": 10,
+        "atk": 1,
+        "def": 1,
+        "crit": 0,
+        "dodge": 1,
+        "aim": 0
+};
 
         this.skills = skills;
         this.sections = sections;

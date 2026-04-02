@@ -16,8 +16,8 @@
     newLevelsSelection: ["all"],
     metadata: {
         enemyTypeOptions: ["monster", "warrior", "mage", "archer", "rogue", "paladin", "spirit", "hunter"],
-        enemySizeOptions: ["s", "m", "l", "xl"],
-        enemySizeToPx: { s: 150, m: 220, l: 300, xl: 400 },
+        enemySizeOptions: ["s", "m", "l", "xl", "2xl"],
+        enemySizeToPx: { s: 150, m: 220, l: 300, xl: 400, "2xl": 600 },
         enemyLevelOptions: ["all", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
     }
 };
@@ -60,6 +60,7 @@ const SORT_FIELDS = [
     { key: "id", label: "id" },
     { key: "name", label: "name" },
     { key: "size", label: "size" },
+    { key: "file_size", label: "file size" },
     { key: "hp", label: "hp" },
     { key: "atk", label: "atk" },
     { key: "def", label: "def" },
@@ -73,6 +74,13 @@ function setStatus(message, kind = "muted") {
     if (!el.status) return;
     el.status.textContent = message;
     el.status.className = kind === "muted" ? "muted" : `muted status-${kind}`;
+}
+
+function formatFileSize(bytes) {
+    const value = Number(bytes) || 0;
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 function showAddSuccessModal(enemyId) {
@@ -290,7 +298,10 @@ async function uploadEnemyImage(enemyId, file) {
         setProcessingProgress(98, "Saving image...");
 
         const target = state.enemies.find(entry => entry.id === enemyId);
-        if (target) target.img = payload.img;
+        if (target) {
+            target.img = payload.img;
+            target.imageSizeBytes = Number(payload.imageSizeBytes || (payload.compression && payload.compression.savedBytes) || 0);
+        }
 
         const dirty = state.dirtyById.get(enemyId);
         if (dirty && Object.prototype.hasOwnProperty.call(dirty, "img")) {
@@ -300,7 +311,23 @@ async function uploadEnemyImage(enemyId, file) {
 
         renderEnemyPanel();
         setProcessingProgress(100, "Done");
-        setStatus(`Image updated for '${enemyId}'.`, "ok");
+        if (payload && payload.compression) {
+            const compression = payload.compression;
+            if (compression.enabled && compression.compressed) {
+                const attempts = `${compression.attemptsUsed || 1}/${compression.maxAttempts || 1}`;
+                setStatus(
+                    `Image updated for '${enemyId}'. TinyPNG compressed ${compression.originalBytes} -> ${compression.savedBytes} bytes (attempts ${attempts}).`,
+                    "ok"
+                );
+            } else if (!compression.enabled) {
+                setStatus(`Image updated for '${enemyId}'. TinyPNG disabled (missing API key).`, "ok");
+            } else {
+                setStatus(`Image updated for '${enemyId}'. TinyPNG skipped (${compression.reason || "no change"}).`, "ok");
+            }
+        } else {
+            setStatus(`Image updated for '${enemyId}'.`, "ok");
+        }
+        return payload;
     } finally {
         state.activeImageJobs = Math.max(0, state.activeImageJobs - 1);
         updateImageProcessingOverlay();
@@ -336,15 +363,44 @@ async function deleteEnemy(enemyId) {
     }
 }
 
+async function openImageInFolder(relativePath) {
+    const response = await fetch("/api/open-in-folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: relativePath })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Failed to open folder.");
+    return payload;
+}
+
 function getEnemyField(enemy, field) {
     const dirty = state.dirtyById.get(enemy.id);
     if (dirty && field in dirty) return dirty[field];
     return enemy[field];
 }
 
-function setDirty(enemyId, field, value) {
-    const existing = state.dirtyById.get(enemyId) || {};
-    existing[field] = value;
+function valuesMatch(a, b) {
+    if (typeof a === "number" || typeof b === "number") {
+        return Number(a) === Number(b);
+    }
+    return String(a ?? "") === String(b ?? "");
+}
+
+function setDirty(enemy, field, value) {
+    if (!enemy || !enemy.id) return;
+    const enemyId = enemy.id;
+    const existing = { ...(state.dirtyById.get(enemyId) || {}) };
+    const originalValue = enemy[field];
+    if (valuesMatch(value, originalValue)) {
+        delete existing[field];
+    } else {
+        existing[field] = value;
+    }
+    if (Object.keys(existing).length === 0) {
+        state.dirtyById.delete(enemyId);
+        return;
+    }
     state.dirtyById.set(enemyId, existing);
 }
 
@@ -353,16 +409,23 @@ function resetDirty(enemyId) {
     renderEnemyPanel();
 }
 
-function setSelectOptions(selectEl, options, selectedValue = "") {
+function setSelectOptions(selectEl, options, selectedValue = "", getLabel = null) {
     if (!selectEl) return;
     selectEl.innerHTML = "";
     options.forEach(optionValue => {
         const option = document.createElement("option");
         option.value = optionValue;
-        option.textContent = optionValue;
+        option.textContent = typeof getLabel === "function" ? getLabel(optionValue) : optionValue;
         if (optionValue === selectedValue) option.selected = true;
         selectEl.appendChild(option);
     });
+}
+
+function getEnemySizeLabel(sizeValue) {
+    const sizeKey = String(sizeValue || "");
+    const px = Number(state.metadata.enemySizeToPx && state.metadata.enemySizeToPx[sizeKey]);
+    if (Number.isFinite(px) && px > 0) return `${sizeKey} (${px}px)`;
+    return sizeKey;
 }
 
 function normalizeLevelsSelection(values) {
@@ -464,7 +527,7 @@ function renderSizeHelp() {
 
 function renderCreateFormOptions() {
     const sizeOptions = state.metadata.enemySizeOptions || [];
-    setSelectOptions(el.newSize, sizeOptions, sizeOptions.includes("m") ? "m" : sizeOptions[0]);
+    setSelectOptions(el.newSize, sizeOptions, sizeOptions.includes("m") ? "m" : sizeOptions[0], getEnemySizeLabel);
     renderSizeHelp();
     refreshAddFormValidation();
 }
@@ -480,7 +543,7 @@ function createLabeledField(labelText, controlEl, extraClass = "") {
     return field;
 }
 
-function createEnemyStatInput(enemy, field, isNumber = false) {
+function createEnemyStatInput(enemy, field, isNumber = false, onDirtyChange = null) {
     const input = document.createElement("input");
     if (isNumber) {
         input.type = "number";
@@ -491,8 +554,9 @@ function createEnemyStatInput(enemy, field, isNumber = false) {
         input.value = String(getEnemyField(enemy, field) ?? "");
     }
     input.addEventListener("input", () => {
-        setDirty(enemy.id, field, isNumber ? Number(input.value || 0) : input.value);
+        setDirty(enemy, field, isNumber ? Number(input.value || 0) : input.value);
         input.classList.add("dirty");
+        if (typeof onDirtyChange === "function") onDirtyChange();
     });
     return input;
 }
@@ -500,29 +564,38 @@ function createEnemyStatInput(enemy, field, isNumber = false) {
 function createEnemyCard(enemy) {
     const card = document.createElement("div");
     card.className = "enemy-card";
+    let saveBtn = null;
+    let resetBtn = null;
+    const updateCardActionState = () => {
+        const dirty = state.dirtyById.get(enemy.id);
+        const hasChanges = Boolean(dirty && Object.keys(dirty).length > 0);
+        if (saveBtn) saveBtn.disabled = !hasChanges;
+        if (resetBtn) resetBtn.disabled = !hasChanges;
+    };
 
     const statsRow = document.createElement("div");
     statsRow.className = "stats-row enemy-stats-row";
 
-    const nameInput = createEnemyStatInput(enemy, "name");
+    const nameInput = createEnemyStatInput(enemy, "name", false, updateCardActionState);
     statsRow.appendChild(createLabeledField("name", nameInput));
 
     const sizeSelect = document.createElement("select");
     const sizeOptions = state.metadata.enemySizeOptions || [];
-    setSelectOptions(sizeSelect, sizeOptions, getEnemyField(enemy, "size") || sizeOptions[0]);
+    setSelectOptions(sizeSelect, sizeOptions, getEnemyField(enemy, "size") || sizeOptions[0], getEnemySizeLabel);
     sizeSelect.addEventListener("change", () => {
-        setDirty(enemy.id, "size", sizeSelect.value);
+        setDirty(enemy, "size", sizeSelect.value);
         sizeSelect.classList.add("dirty");
+        updateCardActionState();
     });
     statsRow.appendChild(createLabeledField("size", sizeSelect));
 
-    statsRow.appendChild(createLabeledField("hp", createEnemyStatInput(enemy, "hp", true)));
-    statsRow.appendChild(createLabeledField("atk", createEnemyStatInput(enemy, "atk", true)));
-    statsRow.appendChild(createLabeledField("def", createEnemyStatInput(enemy, "def", true)));
-    statsRow.appendChild(createLabeledField("crit", createEnemyStatInput(enemy, "crit", true)));
-    statsRow.appendChild(createLabeledField("dodge", createEnemyStatInput(enemy, "dodge", true)));
-    statsRow.appendChild(createLabeledField("aim", createEnemyStatInput(enemy, "aim", true)));
-    statsRow.appendChild(createLabeledField("exp", createEnemyStatInput(enemy, "exp", true)));
+    statsRow.appendChild(createLabeledField("hp", createEnemyStatInput(enemy, "hp", true, updateCardActionState)));
+    statsRow.appendChild(createLabeledField("atk", createEnemyStatInput(enemy, "atk", true, updateCardActionState)));
+    statsRow.appendChild(createLabeledField("def", createEnemyStatInput(enemy, "def", true, updateCardActionState)));
+    statsRow.appendChild(createLabeledField("crit", createEnemyStatInput(enemy, "crit", true, updateCardActionState)));
+    statsRow.appendChild(createLabeledField("dodge", createEnemyStatInput(enemy, "dodge", true, updateCardActionState)));
+    statsRow.appendChild(createLabeledField("aim", createEnemyStatInput(enemy, "aim", true, updateCardActionState)));
+    statsRow.appendChild(createLabeledField("exp", createEnemyStatInput(enemy, "exp", true, updateCardActionState)));
 
     card.appendChild(statsRow);
 
@@ -574,6 +647,29 @@ function createEnemyCard(enemy) {
     imageField.appendChild(imageLabel);
     imageField.appendChild(pickerButton);
     imageField.appendChild(imageInput);
+    const imageMetaRow = document.createElement("div");
+    imageMetaRow.className = "row";
+    const imageSizeText = document.createElement("div");
+    imageSizeText.className = "muted";
+    imageSizeText.textContent = `file size: ${formatFileSize(enemy.imageSizeBytes)}`;
+    imageMetaRow.appendChild(imageSizeText);
+    imageField.appendChild(imageMetaRow);
+
+    const openFolderLink = document.createElement("button");
+    openFolderLink.type = "button";
+    openFolderLink.className = "background-open-link";
+    openFolderLink.textContent = "Open Folder";
+    openFolderLink.addEventListener("click", () => {
+        const imgPath = String(getEnemyField(enemy, "img") || "").trim();
+        if (!imgPath) {
+            setStatus("No image path found for this enemy.", "err");
+            return;
+        }
+        openImageInFolder(imgPath)
+            .then(() => setStatus("Opened file location in Explorer.", "ok"))
+            .catch(error => setStatus(error.message, "err"));
+    });
+    imageField.appendChild(openFolderLink);
 
     const descField = document.createElement("div");
     descField.className = "add-desc-row";
@@ -584,8 +680,9 @@ function createEnemyCard(enemy) {
     descInput.className = "enemy-description";
     descInput.value = String(getEnemyField(enemy, "desc") ?? "");
     descInput.addEventListener("input", () => {
-        setDirty(enemy.id, "desc", descInput.value);
+        setDirty(enemy, "desc", descInput.value);
         descInput.classList.add("dirty");
+        updateCardActionState();
     });
     descField.appendChild(descLabel);
     descField.appendChild(descInput);
@@ -597,18 +694,19 @@ function createEnemyCard(enemy) {
     const actionRow = document.createElement("div");
     actionRow.className = "enemy-card-actions";
 
-    const saveBtn = document.createElement("button");
+    saveBtn = document.createElement("button");
     saveBtn.type = "button";
     saveBtn.textContent = "Save";
     saveBtn.addEventListener("click", () => {
         saveEnemyChanges(enemy.id).catch(error => setStatus(error.message, "err"));
     });
 
-    const resetBtn = document.createElement("button");
+    resetBtn = document.createElement("button");
     resetBtn.type = "button";
     resetBtn.className = "btn-secondary";
     resetBtn.textContent = "Reset";
     resetBtn.addEventListener("click", () => resetDirty(enemy.id));
+    updateCardActionState();
 
     actionRow.appendChild(saveBtn);
     actionRow.appendChild(resetBtn);
@@ -637,6 +735,7 @@ function getEnemySortValue(enemy, col) {
     if (!enemy) return "";
     if (col === "id") return String(enemy.id || "");
     if (col === "name") return String(getEnemyField(enemy, "name") || "");
+    if (col === "file_size") return Number(enemy.imageSizeBytes || 0);
     if (col === "size") {
         const sizeOrder = { s: 1, m: 2, l: 3, xl: 4 };
         const sizeValue = String(getEnemyField(enemy, "size") || "").toLowerCase();
@@ -649,7 +748,7 @@ function getRenderedEnemies() {
     if (!state.sort.col || !state.sort.dir) return state.enemies;
     const sorted = [...state.enemies];
     const dirMul = state.sort.dir === "asc" ? 1 : -1;
-    const numericCols = new Set(["size", "hp", "atk", "def", "crit", "dodge", "aim", "exp"]);
+    const numericCols = new Set(["size", "file_size", "hp", "atk", "def", "crit", "dodge", "aim", "exp"]);
     sorted.sort((a, b) => {
         const av = getEnemySortValue(a, state.sort.col);
         const bv = getEnemySortValue(b, state.sort.col);
@@ -801,8 +900,9 @@ async function addEnemy() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Failed to add enemy.");
 
+    let imageUploadPayload = null;
     if (state.newImageFile) {
-        await uploadEnemyImage(data.id, state.newImageFile);
+        imageUploadPayload = await uploadEnemyImage(data.id, state.newImageFile);
     }
 
     el.newName.value = "";
@@ -811,7 +911,19 @@ async function addEnemy() {
     state.addValidationTouched = false;
 
     await fetchEnemies();
-    setStatus(`Enemy '${data.id}' added.`, "ok");
+    if (imageUploadPayload && imageUploadPayload.compression) {
+        const compression = imageUploadPayload.compression;
+        if (compression.enabled && compression.compressed) {
+            const attempts = `${compression.attemptsUsed || 1}/${compression.maxAttempts || 1}`;
+            setStatus(`Enemy '${data.id}' added with TinyPNG compression (attempts ${attempts}).`, "ok");
+        } else if (!compression.enabled) {
+            setStatus(`Enemy '${data.id}' added. TinyPNG disabled (missing API key).`, "ok");
+        } else {
+            setStatus(`Enemy '${data.id}' added. TinyPNG skipped (${compression.reason || "no change"}).`, "ok");
+        }
+    } else {
+        setStatus(`Enemy '${data.id}' added.`, "ok");
+    }
     showAddSuccessModal(data.id);
     refreshAddFormValidation(false);
 }
@@ -895,6 +1007,3 @@ Promise.all([fetchMetadata(), fetchEnemies()]).catch(error => setStatus(error.me
 renderSortControls();
 resetNewImageSelection();
 refreshAddFormValidation();
-
-
-

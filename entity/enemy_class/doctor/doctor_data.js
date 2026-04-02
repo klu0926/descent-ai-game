@@ -2,7 +2,7 @@ export const DOCTOR_ENEMY = {
     name: "Doctor",
     img: "entity/enemy_class/doctor/doctor_images/doctor.png",
     type: "mage",
-    size: "m",
+    size: "l",
     levels: ["all"],
     hp: 44,
     atk: 12,

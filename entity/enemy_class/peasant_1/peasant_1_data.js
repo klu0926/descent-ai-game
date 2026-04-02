@@ -1,0 +1,15 @@
+export const PEASANT1_ENEMY = {
+    name: "peasant",
+    img: "entity/enemy_class/peasant_1/peasant_1_images/peasant_1.png",
+    type: "monster",
+    size: "l",
+    levels: ["all"],
+    hp: 60,
+    atk: 10,
+    def: 5,
+    crit: 3,
+    dodge: 3,
+    aim: 3,
+    exp: 15,
+    desc: "a peasant ",
+};

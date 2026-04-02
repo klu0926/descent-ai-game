@@ -8,13 +8,17 @@ export class ConsumableItem extends Item {
         temp_icon = "",
         icon = "",
         name = "",
-        displayName = "",
-        rarity = "common",
+        price = 0,
+        healAmount = 0,
         healPercent = 0,
+        effectMode = "once",
+        effectTurns = 1,
+        effectRounds = 1,
         stats = {},
         passives = [],
         storyDesc = "",
-        functionDesc = ""
+        functionDesc = "",
+        desc = ""
     }) {
         super({
             id,
@@ -26,13 +30,17 @@ export class ConsumableItem extends Item {
             temp_icon,
             icon,
             name,
-            displayName,
-            rarity,
+            price,
+            healAmount,
             healPercent,
+            effectMode,
+            effectTurns,
+            effectRounds,
             stats,
             passives,
             storyDesc,
-            functionDesc
+            functionDesc,
+            desc
         });
     }
 }

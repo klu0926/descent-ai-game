@@ -21,7 +21,9 @@ export function consumeInventoryItem(ctx, index) {
         ? resolvedEffects.meta.improvisedMedicineRank
         : 0;
 
-    const healAmount = Math.max(1, Math.floor(ctx.playerInfo.maxHp * (item.healPercent || 0) * healMultiplier));
+    const healAmount = typeof item.getResolvedHealAmount === "function"
+        ? item.getResolvedHealAmount(ctx.playerInfo.maxHp, healMultiplier)
+        : Math.max(1, Math.floor(ctx.playerInfo.maxHp * (item.healPercent || 0) * healMultiplier));
     const oldHp = ctx.playerInfo.hp;
     ctx.playerInfo.hp = Math.min(ctx.playerInfo.maxHp, ctx.playerInfo.hp + healAmount);
     const actualHeal = Math.max(0, ctx.playerInfo.hp - oldHp);

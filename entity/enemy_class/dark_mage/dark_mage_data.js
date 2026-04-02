@@ -1,8 +1,8 @@
-export const DARK_MAGE_ENEMY = {
+export const DARKMAGE_ENEMY = {
     name: "Dark Mage",
     img: "entity/enemy_class/dark_mage/dark_mage_images/dark_mage.png",
     type: "mage",
-    size: "m",
+    size: "l",
     levels: ["all"],
     hp: 20,
     atk: 14,

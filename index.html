@@ -16,6 +16,9 @@
     <audio id="bg-music" loop>
         <source src="resources/music/stereo_color-battle-drum-493709.mp3" type="audio/mpeg">
     </audio>
+    <audio id="gatekeeper-voice" preload="auto">
+        <source src="intro/voice/intro_voice.mp3" type="audio/mpeg">
+    </audio>
     <div class="top-controls">
         <button id="editor-page-btn" class="btn-editor-square" title="Open Enemy Editor">E</button>
         <button id="music-toggle-btn" class="btn-circle" title="Adjust Music Volume">ðŸ”‰</button>
@@ -68,6 +71,9 @@
             <div class="arena-black-layer" aria-hidden="true"></div>
             <div class="arena-top-black-bar" aria-hidden="true"></div>
             <div class="arena-bottom-black-bar" aria-hidden="true"></div>
+            <div id="round-transition-overlay" class="round-transition-overlay" aria-hidden="true"></div>
+            <div id="arena-level-warning" class="arena-level-warning hidden"></div>
+            <button id="round-start-btn" class="tutorial-btn arena-start-btn hidden" type="button">Start Encounter</button>
 
             <div class="arena-actors">
                 <div class="entity-card" id="player-card">
@@ -202,6 +208,22 @@
             </div>
         </div>
 
+        <div id="intro-cinematic-overlay" class="hidden">
+            <video
+                id="intro-cinematic-video"
+                class="intro-cinematic-video"
+                src="intro/video/gate_opening.webm"
+                playsinline
+                preload="auto"
+                controlslist="nodownload noplaybackrate noremoteplayback nofullscreen"
+                disablepictureinpicture
+                ></video>
+            <div class="intro-cinematic-static-layer" aria-hidden="true"></div>
+            <div class="intro-cinematic-black" aria-hidden="true"></div>
+            <div class="intro-cinematic-frame-fade" aria-hidden="true"></div>
+            <div class="video-black-fade-circle" aria-hidden="true"></div>
+        </div>
+
         <div id="tutorial-overlay" class="hidden">
             <div class="tutorial-container">
                 <div class="tutorial-window ornate-border">
@@ -212,7 +234,10 @@
                             <br><br>
                             Now descent into the darkness, and seek your secret...
                         </p>
-                        <button id="start-journey-btn" class="tutorial-btn">Descent</button>
+                        <div class="tutorial-actions">
+                            <button id="play-voice-btn" class="tutorial-btn tutorial-btn-secondary" type="button">Play Voice</button>
+                            <button id="start-journey-btn" class="tutorial-btn" type="button">Descent</button>
+                        </div>
                     </div>
                     <div class="tutorial-static-layer" aria-hidden="true"></div>
                     <div class="tutorial-fade-layer" aria-hidden="true"></div>

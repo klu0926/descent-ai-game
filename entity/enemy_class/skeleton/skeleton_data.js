@@ -2,7 +2,7 @@ export const SKELETON_ENEMY = {
     name: "Skeleton",
     img: "entity/enemy_class/skeleton/skeleton_images/skeleton.png",
     type: "monster",
-    size: "m",
+    size: "l",
     levels: ["all"],
     hp: 55,
     atk: 7,

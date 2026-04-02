@@ -2,7 +2,7 @@ export const CHIEF_ENEMY = {
     name: "chief",
     img: "entity/enemy_class/chief/chief_images/chief.png",
     type: "monster",
-    size: "l",
+    size: "2xl",
     levels: ["all"],
     hp: 100,
     atk: 25,

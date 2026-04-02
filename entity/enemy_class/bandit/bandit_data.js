@@ -2,7 +2,7 @@ export const BANDIT_ENEMY = {
     name: "bandit",
     img: "entity/enemy_class/bandit/bandit_images/bandit.png",
     type: "warrior",
-    size: "m",
+    size: "l",
     levels: ["all"],
     hp: 50,
     atk: 8,

@@ -1,4 +1,4 @@
-import { createEnemy } from "./enemyGenerator.js";
+import { createEnemy, createEnemyFromId } from "./enemyGenerator.js";
 import { generateLootOptions } from "./itemGenerator.js";
 import { getExpNeeded, checkLevelUp, getPlayerExpPercent } from "./levelSystem.js";
 import {
@@ -10,7 +10,6 @@ import {
 import { createCombatSystem } from "./combat/combatSetup.js";
 import {
     createEmptyGearSlots as createEmptyGearSlotsFromPlayerModule,
-    createStarterHelmet as createStarterHelmetFromPlayerModule,
     getPlayerAvatarSrc as getPlayerAvatarSrcFromPlayerModule,
     resetPlayerState as resetPlayerStateFromPlayerModule,
     setPlayerAvatarTemporary as setPlayerAvatarTemporaryFromPlayerModule
@@ -56,6 +55,8 @@ import {
     renderEquipment as renderEquipmentFromUI,
     resetEqReadoutBackground as resetEqReadoutBackgroundFromUI,
     setPauseState as setPauseStateFromUI,
+    setBattleArenaBackground as setBattleArenaBackgroundFromUI,
+    setArenaLevelWarning as setArenaLevelWarningFromUI,
     showEnemyDisplay as showEnemyDisplayFromUI,
     showEnemyInfo as showEnemyInfoFromUI,
     showHitCut as showHitCutFromUI,
@@ -110,6 +111,7 @@ import {
 } from "../skills/passive_runtime.js";
 import { createPassiveSkillManager } from "../skills/passive_skill_manager.js";
 import { ENEMY_SIZE_TO_PX } from "../entity/enemy_class/enemy_type_data.js";
+import { DEFAULT_LEVEL_ID, getLevelById } from "../level/level.js";
 
 const currentGameStats = CURRENT_GAME_STATS;
 const playerInfo = currentGameStats.playerInfo;
@@ -138,6 +140,81 @@ const audioSystem = createAudioSystem();
 const gameEventBus = createEventBus();
 const HIT_CUT_SRC = "resources/images/effects/cut.png";
 const FIRE_EFFECT_SRC = "resources/images/effects/fire.png";
+const INTRO_MUSIC_SRC = "resources/music/joelfazhari-stalking-my-next-victim.mp3";
+const BATTLE_MUSIC_SRC = "resources/music/stereo_color-battle-drum-493709.mp3";
+
+function toPositiveInt(value, fallback = 1) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(1, Math.trunc(parsed));
+}
+
+function getResolvedLevelAndRound(levelId, roundNumber) {
+    const requestedLevelId = toPositiveInt(levelId, DEFAULT_LEVEL_ID);
+    const requestedRound = toPositiveInt(roundNumber, 1);
+    const levelData = getLevelById(requestedLevelId) || getLevelById(DEFAULT_LEVEL_ID);
+    if (!levelData) {
+        return {
+            levelData: null,
+            roundData: null,
+            resolvedLevelId: requestedLevelId,
+            resolvedRound: requestedRound,
+            missingLevelObject: true
+        };
+    }
+    const rounds = Array.isArray(levelData.rounds) ? levelData.rounds : [];
+    if (rounds.length <= 0) {
+        return {
+            levelData,
+            roundData: null,
+            resolvedLevelId: levelData.id,
+            resolvedRound: requestedRound,
+            missingLevelObject: true
+        };
+    }
+    const requestedIndex = requestedRound - 1;
+    const requestedRoundData = rounds[requestedIndex] && typeof rounds[requestedIndex] === "object"
+        ? rounds[requestedIndex]
+        : null;
+    let fallbackRoundIndex = -1;
+    for (let index = rounds.length - 1; index >= 0; index -= 1) {
+        const candidate = rounds[index];
+        if (candidate && typeof candidate === "object") {
+            fallbackRoundIndex = index;
+            break;
+        }
+    }
+    const fallbackRoundData = fallbackRoundIndex >= 0 ? rounds[fallbackRoundIndex] : null;
+    const roundData = requestedRoundData || fallbackRoundData || null;
+    const resolvedRound = requestedRoundData
+        ? requestedRound
+        : (fallbackRoundIndex >= 0 ? fallbackRoundIndex + 1 : requestedRound);
+    const missingLevelObject = !requestedRoundData;
+    return {
+        levelData,
+        roundData,
+        resolvedLevelId: levelData.id,
+        resolvedRound,
+        missingLevelObject
+    };
+}
+
+function getRoundEnemyId(levelId, roundNumber) {
+    const { roundData } = getResolvedLevelAndRound(levelId, roundNumber);
+    const enemyId = roundData && typeof roundData.enemy === "string" ? roundData.enemy.trim() : "";
+    return enemyId || null;
+}
+
+function getRoundBackgroundPath(levelId, roundNumber) {
+    const { roundData } = getResolvedLevelAndRound(levelId, roundNumber);
+    const backgroundPath = roundData && typeof roundData.background === "string" ? roundData.background.trim() : "";
+    return backgroundPath || null;
+}
+
+function getRoundLevelObjectWarning(levelId, roundNumber) {
+    const { missingLevelObject } = getResolvedLevelAndRound(levelId, roundNumber);
+    return missingLevelObject ? "missing level object." : "";
+}
 
 function initAudio() {
     audioSystem.init();
@@ -167,11 +244,15 @@ const {
     uiEnemyDodge,
     uiEnemyAim,
     uiEnemyAvatar,
+    uiEnemyCard,
     uiEnemyInfo,
     uiEnemyHpContainer,
     uiEnemyStatsPanel,
     uiLevelDisplay,
     uiTurnDisplay,
+    uiArenaLevelWarning,
+    roundStartBtn,
+    roundTransitionOverlay,
     overlay,
     modalBtn,
     lootOverlay,
@@ -179,10 +260,12 @@ const {
     lootLeaveBtn,
     tutorialOverlay,
     pauseOverlay,
+    playVoiceBtn,
     startJourneyBtn,
     eqReadout,
     infoTooltip,
     bgMusic,
+    gatekeeperVoiceAudio,
     musicBtn,
     pauseBtn,
     skillTreeBtn,
@@ -216,7 +299,9 @@ const {
     cheatReverseSkillInput,
     classOverlay,
     classOptions,
-    confirmClassBtn
+    confirmClassBtn,
+    introCinematicOverlay,
+    introCinematicVideo
 } = uiRefs;
 
 const DEFAULT_READOUT_HTML = "";
@@ -495,6 +580,40 @@ function floatText(target, msg, type = "info") {
     floatTextFromUI(target, msg, type);
 }
 
+function getIntroVideoVolume(masterVolume) {
+    const base = Number.isFinite(Number(masterVolume)) ? Number(masterVolume) : 0.6;
+    return Math.min(1, Math.max(0, base * 2));
+}
+
+function applyMasterVolume(volume) {
+    const numericVolume = Number.isFinite(Number(volume)) ? Number(volume) : 0.6;
+    audioSystem.setVolume(numericVolume);
+    if (bgMusic) bgMusic.volume = numericVolume;
+    if (gatekeeperVoiceAudio) gatekeeperVoiceAudio.volume = numericVolume;
+    if (introCinematicVideo) introCinematicVideo.volume = getIntroVideoVolume(numericVolume);
+}
+
+function setBgMusicTrack(trackSrc, { restart = false, play = true } = {}) {
+    if (!bgMusic || !trackSrc) return;
+    const sourceElement = bgMusic.querySelector("source");
+    const currentSrc = sourceElement ? sourceElement.getAttribute("src") : (bgMusic.getAttribute("src") || "");
+    const isSameTrack = currentSrc === trackSrc;
+
+    if (!isSameTrack || restart) {
+        if (sourceElement) {
+            sourceElement.setAttribute("src", trackSrc);
+        } else {
+            bgMusic.setAttribute("src", trackSrc);
+        }
+        bgMusic.load();
+    }
+
+    applyMasterVolume(volumeStates[currentGameStats.volIndex].vol);
+    if (play) {
+        bgMusic.play().catch(err => console.log("Audio play failed:", err));
+    }
+}
+
 function setPauseState(paused) {
     setPauseStateFromUI({
         paused,
@@ -506,12 +625,23 @@ function setPauseState(paused) {
 }
 
 function isAnyFullscreenOverlayVisible() {
-    const overlays = [overlay, lootOverlay, pauseOverlay, tutorialOverlay, classOverlay, levelupOverlay, cheatOverlay, skillTreeOverlay];
+    const overlays = [overlay, lootOverlay, pauseOverlay, tutorialOverlay, classOverlay, levelupOverlay, cheatOverlay, skillTreeOverlay, introCinematicOverlay];
     return isAnyFullscreenOverlayVisibleFromUI(overlays);
 }
 
 function clearScreenSpaceEffects() {
     clearScreenSpaceEffectsFromUI();
+}
+
+function setBattleArenaBackground(imagePath) {
+    setBattleArenaBackgroundFromUI(imagePath);
+}
+
+function setArenaLevelWarning(message) {
+    setArenaLevelWarningFromUI({
+        element: uiArenaLevelWarning,
+        message
+    });
 }
 
 function startAvatarBlurPulses() {
@@ -523,8 +653,73 @@ function startAvatarBlurPulses() {
 }
 
 function mountFullscreenOverlaysToBody() {
-    const overlays = [overlay, lootOverlay, tutorialOverlay, pauseOverlay, levelupOverlay, classOverlay, cheatOverlay, skillTreeOverlay];
+    const overlays = [overlay, lootOverlay, tutorialOverlay, pauseOverlay, levelupOverlay, classOverlay, cheatOverlay, skillTreeOverlay, introCinematicOverlay];
     mountFullscreenOverlaysToBodyFromUI(overlays);
+}
+
+function waitMs(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function playIntroGateOpeningSequence() {
+    if (!introCinematicOverlay || !introCinematicVideo) {
+        await waitMs(300);
+        return;
+    }
+
+    introCinematicOverlay.classList.remove("hidden");
+    introCinematicOverlay.classList.remove("intro-cinematic-show-black", "intro-cinematic-fadeout", "intro-cinematic-show-video");
+    void introCinematicOverlay.offsetWidth;
+    introCinematicOverlay.classList.add("intro-cinematic-show-video");
+
+    let videoEnded = false;
+    const markEnded = () => {
+        videoEnded = true;
+        introCinematicVideo.pause();
+    };
+    introCinematicVideo.addEventListener("ended", markEnded, { once: true });
+    introCinematicVideo.controls = false;
+    introCinematicVideo.playbackRate = 0.85;
+    introCinematicVideo.currentTime = 0;
+    if (bgMusic && bgMusic.paused) {
+        bgMusic.play().catch(err => console.log("Audio play failed:", err));
+    }
+
+    try {
+        await introCinematicVideo.play();
+    } catch (_) {
+        videoEnded = true;
+    }
+
+    const blackLeadMs = 850;
+    const currentPlaybackRate = Number.isFinite(introCinematicVideo.playbackRate) && introCinematicVideo.playbackRate > 0
+        ? introCinematicVideo.playbackRate
+        : 1;
+    const maxVideoMs = Number.isFinite(introCinematicVideo.duration) && introCinematicVideo.duration > 0
+        ? Math.ceil((introCinematicVideo.duration / currentPlaybackRate) * 1000) + 650
+        : 8500;
+    const startedAt = Date.now();
+    while (!videoEnded && (Date.now() - startedAt) < maxVideoMs) {
+        const hasDuration = Number.isFinite(introCinematicVideo.duration) && introCinematicVideo.duration > 0;
+        if (hasDuration) {
+            const remainingMs = ((introCinematicVideo.duration - introCinematicVideo.currentTime) / currentPlaybackRate) * 1000;
+            if (remainingMs <= blackLeadMs) break;
+        }
+        await waitMs(50);
+    }
+
+    introCinematicOverlay.classList.add("intro-cinematic-show-black");
+    await waitMs(blackLeadMs);
+
+    introCinematicVideo.pause();
+    videoEnded = true;
+    introCinematicOverlay.classList.add("intro-cinematic-fadeout");
+    await waitMs(720);
+
+    introCinematicVideo.pause();
+    introCinematicVideo.currentTime = 0;
+    introCinematicOverlay.classList.add("hidden");
+    introCinematicOverlay.classList.remove("intro-cinematic-show-video", "intro-cinematic-show-black", "intro-cinematic-fadeout");
 }
 
 function triggerScreenShake() {
@@ -667,15 +862,43 @@ function getActivePlayerPassives() {
     return state.player.activePassives;
 }
 
-function getNextOpenGearSlot() {
+function normalizeSlotFamily(slotKey = "") {
+    if (slotKey === "weapon_1" || slotKey === "weapon_2") return "weapon";
+    if (slotKey === "relic_1" || slotKey === "relic_2") return "relic";
+    return slotKey;
+}
+
+function getPreferredSlotFamiliesForItem(item) {
+    const gearType = item && typeof item.gearType === "string" ? item.gearType.trim().toLowerCase() : "";
+    const slotType = item && typeof item.slotType === "string" ? item.slotType.trim().toLowerCase() : "";
+    const allowedSlots = item && Array.isArray(item.allowedSlots) ? item.allowedSlots : [];
+
+    if (allowedSlots.length > 0) {
+        return [...new Set(allowedSlots.map(slot => normalizeSlotFamily(String(slot).trim().toLowerCase())))];
+    }
+
+    if (slotType) return [normalizeSlotFamily(slotType)];
+    if (gearType === "weapon") return ["weapon"];
+    if (gearType === "accessory" || gearType === "relic") return ["relic"];
+    return [];
+}
+
+function getNextOpenGearSlot(item = null) {
+    const preferredFamilies = getPreferredSlotFamiliesForItem(item);
+    if (preferredFamilies.length > 0) {
+        for (const family of preferredFamilies) {
+            for (const slotKey of GEAR_SLOT_ORDER) {
+                if (normalizeSlotFamily(slotKey) !== family) continue;
+                if (!playerInfo.gearSlots[slotKey]) return slotKey;
+            }
+        }
+        return null;
+    }
+
     for (const slotKey of GEAR_SLOT_ORDER) {
         if (!playerInfo.gearSlots[slotKey]) return slotKey;
     }
     return null;
-}
-
-function createStarterHelmet() {
-    return createStarterHelmetFromPlayerModule(GearItem);
 }
 
 function popPassive(name, target = "player") {
@@ -761,9 +984,7 @@ function resetPlayer() {
         classes: CLASSES,
         getExpNeeded,
         createInitialCheatOverrides,
-        createSmallPotion,
         createEmptyGearSlots,
-        createStarterHelmet,
         ensureActiveClassSkillRanks,
         recalculateStats,
         updatePlayerUI,
@@ -824,15 +1045,35 @@ function initGame() {
 
 function onStartJourney() {
     tutorialOverlay.classList.add("hidden");
-    initAudio();
-    if (bgMusic) {
-        bgMusic.volume = volumeStates[currentGameStats.volIndex].vol;
-        audioSystem.setVolume(volumeStates[currentGameStats.volIndex].vol);
-        bgMusic.play().catch(err => console.log("Audio play failed:", err));
+    if (gatekeeperVoiceAudio) {
+        gatekeeperVoiceAudio.pause();
+        gatekeeperVoiceAudio.currentTime = 0;
     }
+    initAudio();
+    setBgMusicTrack(INTRO_MUSIC_SRC, { restart: true, play: true });
     playSound("pick");
     currentGameStats.hasActiveClassSelection = false;
     showClassSelection();
+}
+
+function forceNormalVolume() {
+    currentGameStats.volIndex = 0;
+    const normalState = volumeStates[0];
+    applyMasterVolume(normalState.vol);
+    if (musicBtn) musicBtn.innerText = normalState.icon;
+}
+
+function onPlayGatekeeperVoice() {
+    forceNormalVolume();
+    if (!gatekeeperVoiceAudio) {
+        floatText("system", "Voice audio element missing.", "info");
+        return;
+    }
+    gatekeeperVoiceAudio.pause();
+    gatekeeperVoiceAudio.currentTime = 0;
+    gatekeeperVoiceAudio.play().catch(() => {
+        floatText("system", "Voice file missing at intro/voice/intro_voice.mp3", "info");
+    });
 }
 
 function showClassSelection() {
@@ -848,8 +1089,10 @@ function showClassSelection() {
         onClassSelected: () => {
             resetPlayer();
         },
-        onConfirmSelection: () => {
-            startLevel(1);
+        onConfirmSelection: async () => {
+            setBgMusicTrack(BATTLE_MUSIC_SRC, { restart: true, play: true });
+            await startLevel(1);
+            await playIntroGateOpeningSequence();
         }
     });
 }
@@ -1032,6 +1275,7 @@ function rollDamage(maxVal) {
 
 const combatBindings = createCombatSystem({
     currentGameStats,
+    levelManager: currentGameStats.levelManager,
     playerInfo,
     gameEventBus,
     GAME_EVENTS,
@@ -1042,9 +1286,18 @@ const combatBindings = createCombatSystem({
     uiLevelDisplay,
     uiEnemyName,
     uiEnemyAvatar,
+    uiEnemyCard,
     uiPlayerAvatar,
     uiTurnDisplay,
+    roundStartBtn,
+    roundTransitionOverlay,
+    createEnemyFromId,
     createEnemy,
+    getRoundEnemyId,
+    getRoundBackgroundPath,
+    getRoundLevelObjectWarning,
+    setBattleArenaBackground,
+    setArenaLevelWarning,
     showEnemyDisplay,
     applyEnemySize,
     updateEnemyUI,
@@ -1235,7 +1488,7 @@ bindUIControls({
     onModalConfirm: () => {
         overlay.classList.add("hidden");
         initAudio();
-        if (bgMusic && bgMusic.paused) bgMusic.play().catch(() => { });
+        setBgMusicTrack(INTRO_MUSIC_SRC, { restart: true, play: true });
         playSound("pick");
         currentGameStats.hasActiveClassSelection = false;
         showClassSelection();
@@ -1247,7 +1500,7 @@ bindUIControls({
         currentGameStats.volIndex = (currentGameStats.volIndex + 1) % volumeStates.length;
         return volumeStates[currentGameStats.volIndex];
     },
-    setAudioVolume: volume => audioSystem.setVolume(volume),
+    setAudioVolume: applyMasterVolume,
     pauseBtn,
     pauseResumeBtn,
     classOverlay,
@@ -1284,6 +1537,10 @@ bindUIControls({
     editorPageBtn,
     onOpenEditorPage: openEditorPage
 });
+
+if (playVoiceBtn) {
+    playVoiceBtn.onclick = onPlayGatekeeperVoice;
+}
 
 window.addEventListener("DOMContentLoaded", initGame);
 

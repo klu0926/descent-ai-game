@@ -1,3 +1,6 @@
+import { CONSUMABLES } from "../../items/consumable/consumable.js";
+import { GEARS } from "../../items/gears/gears.js";
+
 export function createEmptyGearSlots(gearSlotOrder) {
     return gearSlotOrder.reduce((slots, key) => {
         slots[key] = null;
@@ -5,18 +8,42 @@ export function createEmptyGearSlots(gearSlotOrder) {
     }, {});
 }
 
-export function createStarterHelmet(GearItem) {
-    return new GearItem({
-        id: "starter_helmet",
-        name: "Starter Helmet",
-        displayName: "Starter Helmet",
-        gearType: "armor",
-        rarity: "common",
-        icon: "🪖",
-        stats: { def: 2 },
-        passives: [],
-        desc: "A basic helmet issued at the start of your journey."
-    });
+function instantiateById(id) {
+    const itemId = String(id || "").trim();
+    if (!itemId) return null;
+    const consumableTemplate = CONSUMABLES[itemId];
+    if (consumableTemplate && typeof consumableTemplate === "object" && consumableTemplate.constructor) {
+        return new consumableTemplate.constructor();
+    }
+    const gearTemplate = GEARS[itemId];
+    if (gearTemplate && typeof gearTemplate === "object" && gearTemplate.constructor) {
+        return new gearTemplate.constructor();
+    }
+    return null;
+}
+
+function resolveGearSlotCandidates(slotType) {
+    const normalized = String(slotType || "").trim().toLowerCase();
+    if (normalized === "weapon" || normalized === "weapon_1" || normalized === "weapon_2") {
+        return ["weapon_1", "weapon_2"];
+    }
+    if (normalized === "relic" || normalized === "relic_1" || normalized === "relic_2") {
+        return ["relic_1", "relic_2"];
+    }
+    if (normalized) return [normalized];
+    return [];
+}
+
+function placeStartingGear(gearSlots, gearItem) {
+    if (!gearItem || !gearSlots || typeof gearSlots !== "object") return;
+    const candidates = resolveGearSlotCandidates(gearItem.slotType);
+    for (const slotKey of candidates) {
+        if (!Object.prototype.hasOwnProperty.call(gearSlots, slotKey)) continue;
+        if (!gearSlots[slotKey]) {
+            gearSlots[slotKey] = gearItem;
+            return;
+        }
+    }
 }
 
 export function getPlayerAvatarSrc({ classes, selectedClassId, state = "attack" }) {
@@ -47,9 +74,7 @@ export function resetPlayerState({
     classes,
     getExpNeeded,
     createInitialCheatOverrides,
-    createSmallPotion,
     createEmptyGearSlots,
-    createStarterHelmet,
     ensureActiveClassSkillRanks,
     recalculateStats,
     updatePlayerUI,
@@ -85,9 +110,24 @@ export function resetPlayerState({
     }
 
     playerInfo.inventory = [];
-    playerInfo.consumables = [createSmallPotion()];
+    playerInfo.consumables = [];
     playerInfo.gearSlots = createEmptyGearSlots();
-    playerInfo.gearSlots.helmet = createStarterHelmet();
+    const activeClass = currentGameStats.selectedClassId && classes[currentGameStats.selectedClassId]
+        ? classes[currentGameStats.selectedClassId]
+        : (classes.wanderer || null);
+    const classInventoryIds = Array.isArray(activeClass && activeClass.inventory) ? activeClass.inventory : [];
+    classInventoryIds.forEach(itemId => {
+        const instance = instantiateById(itemId);
+        if (!instance) return;
+        playerInfo.inventory.push(instance);
+        if (instance.rewardType === "consumable") {
+            playerInfo.consumables.push(instance);
+            return;
+        }
+        if (instance.rewardType === "gear") {
+            placeStartingGear(playerInfo.gearSlots, instance);
+        }
+    });
     recalculateStats();
     playerInfo.hp = playerInfo.maxHp;
     updatePlayerUI();

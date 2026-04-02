@@ -4,31 +4,111 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Level Editor</title>
-    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./style.css?v=20260330c">
+    <script defer src="./level.js?v=20260330c"></script>
+    <script>
+    (function () {
+        const stream = new EventSource('/__live_reload');
+        stream.addEventListener('reload', function () {
+            window.location.reload();
+        });
+    })();
+    </script>
 </head>
-<body>
+<body class="level-editor-page">
 <div class="wrap">
-    <div class="panel">
+    <div class="panel panel-top-nav">
         <nav class="top-nav" aria-label="Editor sections">
             <a class="top-nav-link" href="/player.html">Player</a>
             <a class="top-nav-link" href="/enemy.html">Enemy</a>
             <a class="top-nav-link is-active" href="/level.html">Level</a>
+            <a class="top-nav-link" href="/backgrounds.html">Background</a>
             <a class="top-nav-link" href="/items.html">Items</a>
         </nav>
     </div>
+
     <div class="panel">
         <h1>Level Editor</h1>
-        <div class="muted">This page is ready for level progression tools.</div>
+        <div class="muted">Manage level rounds, background art, and round flow data.</div>
+        <div id="status" class="muted">Loading levels...</div>
+    </div>
+
+    <div class="panel panel-flex-col">
+        <div class="panel-title-row">
+            <h1 class="section-title">Level Panel</h1>
+            <button
+                type="button"
+                class="panel-collapse-btn"
+                data-collapse-toggle
+                data-collapse-target="level-panel-body"
+                aria-expanded="true"
+            >Close</button>
+        </div>
+        <div id="level-panel-body">
+            <div class="muted">Assign round backgrounds from your global background library and update <code>level/level.js</code>.</div>
+            <div id="level-panel-list" class="enemy-panel-list"></div>
+        </div>
+    </div>
+
+</div>
+
+<div id="bg-select-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card bg-select-modal-card" role="dialog" aria-modal="true" aria-labelledby="bg-select-title">
+        <h2 id="bg-select-title" class="modal-title">Select Background</h2>
+        <p class="modal-message">Click a background image to assign it to this round.</p>
+        <div id="bg-select-list" class="bg-select-list"></div>
+        <div class="modal-actions">
+            <button id="bg-select-close-btn" type="button" class="btn-secondary">Close</button>
+        </div>
     </div>
 </div>
-<script>
-(function () {
-    const stream = new EventSource('/__live_reload');
-    stream.addEventListener('reload', function () {
-        window.location.reload();
-    });
-})();
-</script>
+
+<div id="vendor-select-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card bg-select-modal-card" role="dialog" aria-modal="true" aria-labelledby="vendor-select-title">
+        <h2 id="vendor-select-title" class="modal-title">Select Vendor Items</h2>
+        <p class="modal-message">Click items to toggle what this vendor can sell.</p>
+        <div id="vendor-select-list" class="bg-select-list"></div>
+        <div class="modal-actions">
+            <button id="vendor-select-close-btn" type="button" class="btn-secondary">Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="image-processing-overlay" class="processing-overlay hidden" aria-hidden="true">
+    <div class="processing-overlay-card">
+        <div id="processing-overlay-text" class="processing-overlay-text">Processing image...</div>
+        <div class="processing-progress-track">
+            <div id="processing-progress-fill" class="processing-progress-fill"></div>
+        </div>
+        <div id="processing-progress-label" class="processing-progress-label">0%</div>
+    </div>
+</div>
+
+<div id="delete-confirm-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+        <h2 id="delete-confirm-title" class="modal-title">Remove Round</h2>
+        <p id="delete-confirm-message" class="modal-message">Remove this round from the level?</p>
+        <div class="modal-actions">
+            <button id="delete-cancel-btn" type="button" class="btn-secondary">Cancel</button>
+            <button id="delete-confirm-btn" type="button" class="btn-danger">Remove</button>
+        </div>
+    </div>
+</div>
+
+<div id="bg-import-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="bg-import-title">
+        <h2 id="bg-import-title" class="modal-title">Import Background</h2>
+        <p class="modal-message">Set a filename for this new background image.</p>
+        <div class="add-desc-row">
+            <span class="add-col-label">background_image name</span>
+            <input id="bg-import-name-input" type="text" placeholder="level_1_round_1">
+        </div>
+        <div class="modal-actions">
+            <button id="bg-import-cancel-btn" type="button" class="btn-secondary">Cancel</button>
+            <button id="bg-import-confirm-btn" type="button">Import</button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
-

@@ -44,10 +44,14 @@ function isEnemyAvailableAtLevel(template, level) {
     return template.levels.some(entry => Number(entry) === Number(level));
 }
 
-export function createEnemy(level) {
-    const eligibleTemplates = ENEMY_TYPES.filter(template => isEnemyAvailableAtLevel(template, level));
-    const sourcePool = eligibleTemplates.length > 0 ? eligibleTemplates : ENEMY_TYPES;
-    const template = sourcePool[Math.floor(Math.random() * sourcePool.length)];
+function getEnemyIdFromTemplate(template) {
+    if (!template || typeof template.img !== "string") return "";
+    const match = template.img.match(/entity\/enemy_class\/([^/]+)\//i);
+    if (!match || !match[1]) return "";
+    return match[1].toLowerCase();
+}
+
+function createEnemyFromTemplate(template, level) {
     const hpScale = (1 + (level * ENEMY_CURVE_CONFIG.base.hpLinear) + (level * level * ENEMY_CURVE_CONFIG.base.hpQuadratic))
         * getLateGameMultiplier(level, ENEMY_CURVE_CONFIG.lateGame.hpLinear, ENEMY_CURVE_CONFIG.lateGame.hpQuadratic);
     const statScale = (1 + (level * ENEMY_CURVE_CONFIG.base.statLinear) + (level * level * ENEMY_CURVE_CONFIG.base.statQuadratic))
@@ -71,5 +75,23 @@ export function createEnemy(level) {
         aim: getScaledValue(template.aim, finesseScale * earlyGameScale.finesse, 0),
         exp: getScaledValue(template.exp || 15, statScale * earlyGameScale.stat, 5)
     });
+}
+
+export function createEnemy(level) {
+    const eligibleTemplates = ENEMY_TYPES.filter(template => isEnemyAvailableAtLevel(template, level));
+    const sourcePool = eligibleTemplates.length > 0 ? eligibleTemplates : ENEMY_TYPES;
+    const template = sourcePool[Math.floor(Math.random() * sourcePool.length)];
+    return createEnemyFromTemplate(template, level);
+}
+
+export function createEnemyFromId(enemyId, level) {
+    const normalizedEnemyId = String(enemyId || "").trim().toLowerCase();
+    if (!normalizedEnemyId) return createEnemy(level);
+
+    const byImageFolder = ENEMY_TYPES.find(template => getEnemyIdFromTemplate(template) === normalizedEnemyId);
+    const byName = ENEMY_TYPES.find(template => String(template.name || "").trim().toLowerCase() === normalizedEnemyId);
+    const template = byImageFolder || byName;
+    if (!template) return createEnemy(level);
+    return createEnemyFromTemplate(template, level);
 }
 

@@ -77,10 +77,14 @@ export function bindUIControls({
     }
 
     window.addEventListener("keydown", event => {
-        if (event.key !== "Escape") return;
+        const isEscape = event.key === "Escape";
+        const isSpace = event.code === "Space" || event.key === " ";
+        if (!isEscape && !isSpace) return;
+        if (event.repeat) return;
         const targetTag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : "";
         if (targetTag === "input" || targetTag === "textarea") return;
         if (classOverlay && !classOverlay.classList.contains("hidden")) return;
+        if (isSpace) event.preventDefault();
         setPauseState(!getIsPaused());
     });
 

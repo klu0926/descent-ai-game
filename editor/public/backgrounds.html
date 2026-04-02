@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Background Editor</title>
+    <link rel="stylesheet" href="./style.css?v=20260331a">
+    <script defer src="./backgrounds.js?v=20260331a"></script>
+    <script>
+    (function () {
+        const stream = new EventSource('/__live_reload');
+        stream.addEventListener('reload', function () {
+            window.location.reload();
+        });
+    })();
+    </script>
+</head>
+<body class="background-editor-page">
+<div class="wrap">
+    <div class="panel panel-top-nav">
+        <nav class="top-nav" aria-label="Editor sections">
+            <a class="top-nav-link" href="/player.html">Player</a>
+            <a class="top-nav-link" href="/enemy.html">Enemy</a>
+            <a class="top-nav-link" href="/level.html">Level</a>
+            <a class="top-nav-link is-active" href="/backgrounds.html">Background</a>
+            <a class="top-nav-link" href="/items.html">Items</a>
+        </nav>
+    </div>
+
+    <div class="panel">
+        <h1>Background Editor</h1>
+        <div class="muted">Manage all level backgrounds across the whole game. Add new images, replace files, and rename background image names.</div>
+        <div id="status" class="muted mt8">Loading backgrounds...</div>
+    </div>
+
+    <div class="panel panel-flex-col">
+        <div class="panel-title-row">
+            <h1 class="section-title">Add New Background</h1>
+            <button
+                type="button"
+                class="panel-collapse-btn"
+                data-collapse-toggle
+                data-collapse-target="background-add-body"
+                aria-expanded="true"
+            >Close</button>
+        </div>
+        <div id="background-add-body">
+            <div class="muted">Choose a level folder, set a name, then upload an image.</div>
+            <div class="level-background-section mt8">
+                <div class="level-background-left">
+                    <button id="add-bg-picker-btn" class="new-image-picker-btn" type="button">
+                        <span id="add-bg-picker-text" class="new-image-picker-text">click to import background</span>
+                        <img id="add-bg-preview" class="new-image-preview hidden" alt="New background preview">
+                    </button>
+                    <input id="add-bg-file-input" class="enemy-image-input" type="file" accept="image/*">
+                </div>
+                <div class="level-background-right">
+                    <span class="add-col-label">target level</span>
+                    <select id="add-bg-level-select"></select>
+                    <span class="add-col-label">background_image name</span>
+                    <input id="add-bg-name-input" type="text" placeholder="level_1_background">
+                    <button id="add-bg-save-btn" type="button">Add Background</button>
+                </div>
+            </div>
+            <div id="add-bg-warning" class="add-form-warning hidden"></div>
+        </div>
+    </div>
+
+    <div class="panel panel-flex-col">
+        <div class="panel-title-row">
+            <h1 class="section-title">Background Panel</h1>
+            <button
+                type="button"
+                class="panel-collapse-btn"
+                data-collapse-toggle
+                data-collapse-target="background-list-body"
+                aria-expanded="true"
+            >Close</button>
+        </div>
+        <div id="background-list-body">
+            <div class="muted">All backgrounds from all levels. Remove is disabled when an image is used by rounds.</div>
+            <div class="row mt8">
+                <span class="add-col-label">sort by</span>
+                <select id="background-sort-select">
+                    <option value="name">name</option>
+                    <option value="updated">update time</option>
+                    <option value="size">image size</option>
+                </select>
+            </div>
+            <div id="background-panel-list" class="enemy-panel-list mt8"></div>
+        </div>
+    </div>
+</div>
+
+<div id="image-processing-overlay" class="processing-overlay hidden" aria-hidden="true">
+    <div class="processing-overlay-card">
+        <div id="processing-overlay-text" class="processing-overlay-text">Processing image...</div>
+        <div class="processing-progress-track">
+            <div id="processing-progress-fill" class="processing-progress-fill"></div>
+        </div>
+        <div id="processing-progress-label" class="processing-progress-label">0%</div>
+    </div>
+</div>
+
+</body>
+</html>

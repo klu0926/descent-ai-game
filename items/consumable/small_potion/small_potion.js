@@ -7,17 +7,22 @@ export class SmallPotion extends ConsumableItem {
             id: "small_potion",
             consumableType: "healing",
             image: "items/consumable/small_potion/small_potion.png",
-            temp_icon: "\uD83E\uDDEA",
+            temp_icon: "🧪",
             name: "Small Potion",
-            displayName: "Small Potion",
-            rarity: "uncommon",
-            healPercent: 0.25,
+            price: 100,
+            healAmount: 0,
+            healPercent: 0.1,
+            effectMode: "once",
+            effectTurns: 1,
+            effectRounds: 1,
             stats: {},
             passives: [],
             storyDesc: "A grimy vial swirls with metallic dark fluid, reeking of ash and rot. Cursed healing tastes wicked,",
             functionDesc: "Restores 25% HP."
         });
-    }
+    
+        this.implemented = true;
+}
 
     resolveConsumableEffects(context = {}) {
         const activePassives = Array.isArray(context.activePassives)

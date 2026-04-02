@@ -2,7 +2,7 @@ export const ARCHER_ENEMY = {
     name: "Archer",
     img: "entity/enemy_class/archer/archer_images/archer.png",
     type: "archer",
-    size: "s",
+    size: "l",
     levels: ["all"],
     hp: 30,
     atk: 8,

@@ -1,0 +1,15 @@
+export const CULTIST_ENEMY = {
+    name: "cultist",
+    img: "entity/enemy_class/cultist/cultist_images/cultist.png",
+    type: "monster",
+    size: "l",
+    levels: ["all"],
+    hp: 60,
+    atk: 10,
+    def: 5,
+    crit: 3,
+    dodge: 3,
+    aim: 3,
+    exp: 15,
+    desc: "a cultist",
+};

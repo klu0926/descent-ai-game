@@ -1,5 +1,6 @@
 import { PlayerCharacter } from "../entity/character/character.js";
 import { getExpNeeded } from "./levelSystem.js";
+import { createLevelManager } from "../level/level_manager.js";
 
 export function createInitialBattleState() {
     return {
@@ -33,6 +34,12 @@ export function createInitialCheatOverrides() {
     };
 }
 
+export const LEVEL_MANAGER = createLevelManager({
+    level: 1,
+    round: 1,
+    turn: 0
+});
+
 export const CURRENT_GAME_STATS = {
     playerInfo: new PlayerCharacter({
         lvl: 1,
@@ -50,7 +57,10 @@ export const CURRENT_GAME_STATS = {
         skillPoints: 0,
         skillTreeRanks: {}
     }),
-    currentLevel: 1,
+    currentLevel: LEVEL_MANAGER.getLevel(),
+    currentRound: LEVEL_MANAGER.getRound(),
+    currentTurn: LEVEL_MANAGER.getTurn(),
+    levelManager: LEVEL_MANAGER,
     currentEnemy: null,
     isPlayerTurn: true,
     isAnimating: false,
@@ -78,3 +88,5 @@ export const CURRENT_GAME_STATS = {
     skillTreeOpenedFromPausedState: false,
     volIndex: 3
 };
+
+LEVEL_MANAGER.syncToCurrentGame(CURRENT_GAME_STATS);

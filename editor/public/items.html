@@ -4,31 +4,149 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Items Editor</title>
-    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./style.css?v=20260401l">
+    <script defer src="./items.js?v=20260401l"></script>
+    <script>
+    (function () {
+        const stream = new EventSource('/__live_reload');
+        stream.addEventListener('reload', function () {
+            window.location.reload();
+        });
+    })();
+    </script>
 </head>
 <body>
 <div class="wrap">
-    <div class="panel">
+    <div class="panel panel-top-nav">
         <nav class="top-nav" aria-label="Editor sections">
             <a class="top-nav-link" href="/player.html">Player</a>
             <a class="top-nav-link" href="/enemy.html">Enemy</a>
             <a class="top-nav-link" href="/level.html">Level</a>
+            <a class="top-nav-link" href="/backgrounds.html">Background</a>
             <a class="top-nav-link is-active" href="/items.html">Items</a>
         </nav>
     </div>
+
     <div class="panel">
         <h1>Items Editor</h1>
-        <div class="muted">This page is ready for item editing features.</div>
+        <div class="muted">View, add, update, and delete item records. Data is stored in <code>items/all_items/items.json</code>.</div>
+        <div id="items-status" class="muted mt8">Loading item data...</div>
+    </div>
+
+    <div class="panel">
+        <h1 class="section-title">Add new items</h1>
+        <div class="add-main-col mt8">
+            <div class="items-add-row-one">
+                <div class="stats-field">
+                    <span class="add-col-label">type</span>
+                    <select id="new-kind">
+                        <option value="item" selected>item</option>
+                        <option value="gear">gear</option>
+                    </select>
+                </div>
+                <div class="stats-field">
+                    <span class="add-col-label">name</span>
+                    <input id="new-name" placeholder="name">
+                </div>
+                <div class="stats-field" id="new-subtype-wrap">
+                    <span class="add-col-label" id="new-subtype-label">item type</span>
+                    <select id="new-subtype"></select>
+                </div>
+                <div class="stats-field">
+                    <span class="add-col-label">temp icon</span>
+                    <select id="new-temp-icon"></select>
+                </div>
+                <div class="stats-field price-field">
+                    <span class="add-col-label">price</span>
+                    <input id="new-price" type="number" min="0" step="1" value="100" placeholder="100">
+                </div>
+            </div>
+
+            <div class="items-add-row-two">
+                <div class="add-image-row items-inline-image">
+                    <span class="add-col-label">image</span>
+                    <button id="new-image-picker-btn" class="new-image-picker-btn add-image-inline-btn" type="button">
+                        <span id="new-image-picker-text" class="new-image-picker-text">click to import image</span>
+                        <img id="new-image-preview" class="new-image-preview hidden" alt="New entry image preview">
+                    </button>
+                    <input id="new-image-input" class="enemy-image-input" type="file" accept="image/*">
+                </div>
+                <div class="add-desc-row">
+                    <span class="add-col-label">story desc</span>
+                    <textarea id="new-story-desc" placeholder="story description"></textarea>
+                </div>
+                <div class="add-desc-row">
+                    <span class="add-col-label">function desc</span>
+                    <textarea id="new-function-desc" placeholder="function description"></textarea>
+                </div>
+            </div>
+
+            <div class="items-stats-row">
+                <div class="stats-field"><span class="add-col-label">hp</span><input id="new-stat-hp" type="number" step="1" value="0"></div>
+                <div class="stats-field"><span class="add-col-label">atk</span><input id="new-stat-atk" type="number" step="1" value="0"></div>
+                <div class="stats-field"><span class="add-col-label">def</span><input id="new-stat-def" type="number" step="1" value="0"></div>
+                <div class="stats-field"><span class="add-col-label">crit</span><input id="new-stat-crit" type="number" step="1" value="0"></div>
+                <div class="stats-field"><span class="add-col-label">dodge</span><input id="new-stat-dodge" type="number" step="1" value="0"></div>
+                <div class="stats-field"><span class="add-col-label">aim</span><input id="new-stat-aim" type="number" step="1" value="0"></div>
+            </div>
+
+            <div id="new-consumable-effects" class="items-effects-row">
+                <div class="stats-field"><span class="add-col-label">healing amount</span><input id="new-heal-amount" type="number" min="0" step="1" value="0"></div>
+                <div class="stats-field"><span class="add-col-label">healing %</span><input id="new-heal-percent" type="number" min="0" max="100" step="0.1" value="0"></div>
+                <div class="stats-field"><span class="add-col-label">effect mode</span>
+                    <select id="new-effect-mode">
+                        <option value="once" selected>once</option>
+                        <option value="turn">turn</option>
+                        <option value="round">round</option>
+                    </select>
+                </div>
+                <div id="new-effect-turn-wrap" class="stats-field hidden"><span class="add-col-label">turn count</span><input id="new-effect-turns" type="number" min="1" step="1" value="1"></div>
+                <div id="new-effect-round-wrap" class="stats-field hidden"><span class="add-col-label">round count</span><input id="new-effect-rounds" type="number" min="1" step="1" value="1"></div>
+            </div>
+
+            <div class="add-action-row">
+                <button id="add-entry-btn" type="button">Add Entry</button>
+                <div id="add-entry-warning" class="add-form-warning hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel panel-flex-col">
+        <h1 class="section-title">Items Panel</h1>
+        <div id="entry-filter-bar" class="enemy-sort-bar"></div>
+        <div class="muted">Save or reset each card after editing.</div>
+        <div id="entry-panel-list" class="enemy-panel-list"></div>
     </div>
 </div>
-<script>
-(function () {
-    const stream = new EventSource('/__live_reload');
-    stream.addEventListener('reload', function () {
-        window.location.reload();
-    });
-})();
-</script>
+
+<div id="add-success-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="add-success-title">
+        <h2 id="add-success-title" class="modal-title">Entry Added</h2>
+        <p id="add-success-message" class="modal-message">Entry created successfully.</p>
+        <button id="add-success-close" type="button">OK</button>
+    </div>
+</div>
+
+<div id="entry-delete-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="entry-delete-title">
+        <h2 id="entry-delete-title" class="modal-title">Delete Entry</h2>
+        <p id="entry-delete-message" class="modal-message">Delete this entry?</p>
+        <div class="modal-actions">
+            <button id="entry-delete-cancel-btn" type="button" class="btn-secondary">Cancel</button>
+            <button id="entry-delete-confirm-btn" type="button" class="btn-danger">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div id="image-processing-overlay" class="processing-overlay hidden" aria-hidden="true">
+    <div class="processing-overlay-card">
+        <div id="processing-overlay-text" class="processing-overlay-text">Processing image...</div>
+        <div class="processing-progress-track">
+            <div id="processing-progress-fill" class="processing-progress-fill"></div>
+        </div>
+        <div id="processing-progress-label" class="processing-progress-label">0%</div>
+    </div>
+</div>
 </body>
 </html>
 
