@@ -72,21 +72,16 @@ export function resetPlayerState({
     playerInfo,
     currentGameStats,
     classes,
-    getExpNeeded,
     createInitialCheatOverrides,
     createEmptyGearSlots,
     ensureActiveClassSkillRanks,
     recalculateStats,
     updatePlayerUI,
-    updateExpUI,
     renderEquipment,
     updateSkillTreeButton,
     renderSkillTree,
     setAvatarToAttack
 }) {
-    playerInfo.lvl = 1;
-    playerInfo.exp = 0;
-    playerInfo.maxExp = getExpNeeded(1);
     playerInfo.skillPoints = 20;
     playerInfo.skillTreeRanks = {};
     ensureActiveClassSkillRanks();
@@ -112,6 +107,7 @@ export function resetPlayerState({
     playerInfo.inventory = [];
     playerInfo.consumables = [];
     playerInfo.gearSlots = createEmptyGearSlots();
+    playerInfo.essence = 0;
     const activeClass = currentGameStats.selectedClassId && classes[currentGameStats.selectedClassId]
         ? classes[currentGameStats.selectedClassId]
         : (classes.wanderer || null);
@@ -131,7 +127,6 @@ export function resetPlayerState({
     recalculateStats();
     playerInfo.hp = playerInfo.maxHp;
     updatePlayerUI();
-    updateExpUI();
     renderEquipment();
     updateSkillTreeButton();
     renderSkillTree();

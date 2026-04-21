@@ -11,7 +11,7 @@ export class BodyRug extends Gear {
             temp_icon: "🦺",
             price: 20,
             storyDesc: "a dirty rug",
-            functionDesc: "",
+            functionDesc: "Def +3",
             stats: {
                 hp: 0,
                 atk: 0,

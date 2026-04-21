@@ -16,14 +16,6 @@
         dodge: 15,
         aim: 5
     },
-    levelUpGrowth: {
-        hp: 7,
-        atk: 2,
-        def: 0,
-        crit: 1,
-        dodge: 1,
-        aim: 1
-    },
     passiveSkills: [],
     skillTree: {
         maxLevel: 20,

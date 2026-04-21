@@ -1,0 +1,15 @@
+export const DUMMY_ENEMY = {
+    name: "Dummy",
+    img: "entity/enemy_class/dummy/dummy_images/dummy.png",
+    type: "monster",
+    size: "m",
+    hp: 60,
+    atk: 0,
+    def: 1,
+    crit: 0,
+    dodge: 2,
+    aim: 3,
+    essence: 1,
+    canAttack: false,
+    desc: "a training dummy",
+};

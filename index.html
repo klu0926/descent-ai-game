@@ -14,10 +14,7 @@
 
 <body>
     <audio id="bg-music" loop>
-        <source src="resources/music/stereo_color-battle-drum-493709.mp3" type="audio/mpeg">
-    </audio>
-    <audio id="gatekeeper-voice" preload="auto">
-        <source src="intro/voice/intro_voice.mp3" type="audio/mpeg">
+        <source src="resources/audio/music/stereo_color-battle-drum-493709.mp3" type="audio/mpeg">
     </audio>
     <div class="top-controls">
         <button id="editor-page-btn" class="btn-editor-square" title="Open Enemy Editor">E</button>
@@ -25,6 +22,7 @@
     </div>
 
     <div id="game-container">
+        <div id="overall-black-fade" class="overall-black-fade is-active" aria-hidden="true"></div>
         <div class="arena-hud">
             <div class="entity-info">
                 <h2 class="entity-name" id="player-name">Lv.1 Adventurer</h2>
@@ -63,6 +61,7 @@
                     <div class="stat-stack"><span class="stat-label">DODG</span><span id="enemy-dodge">0</span></div>
                     <div class="stat-stack"><span class="stat-label">AIM</span><span id="enemy-aim">0</span></div>
                 </div>
+                <div class="skills-readout skills-readout-enemy" id="enemy-skills"></div>
             </div>
         </div>
 
@@ -71,7 +70,7 @@
             <div class="arena-black-layer" aria-hidden="true"></div>
             <div class="arena-top-black-bar" aria-hidden="true"></div>
             <div class="arena-bottom-black-bar" aria-hidden="true"></div>
-            <div id="round-transition-overlay" class="round-transition-overlay" aria-hidden="true"></div>
+            <div id="round-transition-overlay" class="round-transition-overlay is-active" aria-hidden="true"></div>
             <div id="arena-level-warning" class="arena-level-warning hidden"></div>
             <button id="round-start-btn" class="tutorial-btn arena-start-btn hidden" type="button">Start Encounter</button>
 
@@ -98,27 +97,17 @@
                     <button id="skill-tree-btn" class="skills-thin-btn" title="Open Skill Tree">Skills</button>
                     <button id="cheat-btn" class="skills-thin-btn" title="Open Cheat Panel">Cheat</button>
                 </div>
-                <div id="exp-shake-wrap" class="exp-shake-wrap-spaced">
-                    <div id="player-exp-container" class="player-exp-container">
-                        <div id="player-exp-bar" class="player-exp-bar"></div>
-                        <div class="exp-grid-overlay">
-                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
-                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
-                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
-                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
-                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
-                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
-                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
-                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
-                            <div class="exp-grid-cell exp-grid-cell-divider"></div>
-                            <div></div>
-                        </div>
-                        <div id="player-exp-text" class="player-exp-text">0 / 60</div>
-                    </div>
-                </div>
                 <div class="inventory-container inventory-container-main">
-                    <div class="inventory-grid gear-grid" id="gear-grid"></div>
-                    <div class="inventory-grid consumable-grid" id="inventory-grid"></div>
+                    <div class="gear-row">
+                        <div class="essence-cell" id="essence-cell" title="Essence">
+                            <div class="essence-cell-label">ESS</div>
+                            <div class="essence-cell-value" id="essence-value">0</div>
+                        </div>
+                        <div class="inventory-grid gear-grid" id="gear-grid"></div>
+                    </div>
+                    <div class="consumable-row">
+                        <div class="inventory-grid consumable-grid" id="inventory-grid"></div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -143,14 +132,6 @@
             <div class="pause-modal">
                 <h2 class="golden-text">Paused</h2>
                 <button id="pause-resume-btn" class="rpg-btn">Resume</button>
-            </div>
-        </div>
-
-        <div id="levelup-overlay" class="hidden overlay-levelup">
-            <div class="modal ornate-border themed-window modal-center-text">
-                <h2 class="themed-title">Level Up!</h2>
-                <p id="levelup-desc" class="themed-body">You have reached Level 2!</p>
-                <button id="levelup-close-btn" class="tutorial-btn themed-btn">Continue</button>
             </div>
         </div>
 
@@ -212,7 +193,7 @@
             <video
                 id="intro-cinematic-video"
                 class="intro-cinematic-video"
-                src="intro/video/gate_opening.webm"
+                src="resources/cutscene/cutscene_video/gate_opening.mp4"
                 playsinline
                 preload="auto"
                 controlslist="nodownload noplaybackrate noremoteplayback nofullscreen"
@@ -222,6 +203,7 @@
             <div class="intro-cinematic-black" aria-hidden="true"></div>
             <div class="intro-cinematic-frame-fade" aria-hidden="true"></div>
             <div class="video-black-fade-circle" aria-hidden="true"></div>
+            <div class="cutscene-skip-hint" aria-hidden="true">Esc to skip</div>
         </div>
 
         <div id="tutorial-overlay" class="hidden">
@@ -235,7 +217,6 @@
                             Now descent into the darkness, and seek your secret...
                         </p>
                         <div class="tutorial-actions">
-                            <button id="play-voice-btn" class="tutorial-btn tutorial-btn-secondary" type="button">Play Voice</button>
                             <button id="start-journey-btn" class="tutorial-btn" type="button">Descent</button>
                         </div>
                     </div>

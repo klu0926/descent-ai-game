@@ -16,10 +16,8 @@ export function createCheatPanelController({
     setPauseState,
     recalculateStats,
     updatePlayerUI,
-    updateExpUI,
     floatText,
     getClassDefaultStats,
-    getClassLevelUpGrowth,
     createInitialCheatOverrides
 }) {
     const {
@@ -101,7 +99,6 @@ export function createCheatPanelController({
         recalculateStats();
         playerInfo.hp = Math.min(playerInfo.maxHp, Math.max(0, enteredHp));
         updatePlayerUI();
-        updateExpUI();
         floatText("player", "Cheat stats saved", "system");
         fillCheatFormWithCurrentStats();
         closeCheatPanel();
@@ -109,20 +106,17 @@ export function createCheatPanelController({
 
     function resetCheatToClassDefault() {
         const defaults = getClassDefaultStats();
-        const growth = getClassLevelUpGrowth();
-        const levelsBeyondOne = Math.max(0, (playerInfo.lvl || 1) - 1);
 
         currentGameStats.cheatOverrides = createInitialCheatOverrides();
-        playerInfo.baseHp = defaults.hp + (growth.hp * levelsBeyondOne);
-        playerInfo.baseAtk = defaults.atk + (growth.atk * levelsBeyondOne);
-        playerInfo.baseDef = defaults.def + (growth.def * levelsBeyondOne);
-        playerInfo.baseCrit = defaults.crit + (growth.crit * levelsBeyondOne);
-        playerInfo.baseDodge = defaults.dodge + (growth.dodge * levelsBeyondOne);
-        playerInfo.baseAim = defaults.aim + (growth.aim * levelsBeyondOne);
+        playerInfo.baseHp = defaults.hp;
+        playerInfo.baseAtk = defaults.atk;
+        playerInfo.baseDef = defaults.def;
+        playerInfo.baseCrit = defaults.crit;
+        playerInfo.baseDodge = defaults.dodge;
+        playerInfo.baseAim = defaults.aim;
         recalculateStats();
         playerInfo.hp = playerInfo.maxHp;
         updatePlayerUI();
-        updateExpUI();
         floatText("player", "Stats reset", "system");
         fillCheatFormWithCurrentStats();
     }

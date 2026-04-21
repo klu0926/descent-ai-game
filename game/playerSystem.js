@@ -12,31 +12,6 @@ export function getClassDefaultStats(selectedClassId, classes) {
     };
 }
 
-export function getClassLevelUpGrowth(selectedClassId, classes) {
-    const activeClass = selectedClassId && classes[selectedClassId] ? classes[selectedClassId] : classes.wanderer;
-    const growth = activeClass && activeClass.levelUpGrowth ? activeClass.levelUpGrowth : null;
-    return {
-        hp: growth ? (growth.hp || 0) : 10,
-        atk: growth ? (growth.atk || 0) : 1,
-        def: growth ? (growth.def || 0) : 1,
-        crit: growth ? (growth.crit || 0) : 0,
-        dodge: growth ? (growth.dodge || 0) : 0,
-        aim: growth ? (growth.aim || 0) : 0
-    };
-}
-
-export function applyClassLevelUpGrowth(playerInfo, levelsGained, growth) {
-    if (levelsGained <= 0) return;
-    const hpGain = growth.hp * levelsGained;
-    playerInfo.baseHp += hpGain;
-    playerInfo.hp += hpGain;
-    playerInfo.baseAtk += growth.atk * levelsGained;
-    playerInfo.baseDef += growth.def * levelsGained;
-    playerInfo.baseCrit += growth.crit * levelsGained;
-    playerInfo.baseDodge += growth.dodge * levelsGained;
-    playerInfo.baseAim += growth.aim * levelsGained;
-}
-
 export function toNonNegativeInt(value, fallback) {
     const parsed = Number.parseInt(value, 10);
     if (!Number.isFinite(parsed)) return fallback;

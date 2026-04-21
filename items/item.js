@@ -27,6 +27,13 @@ function normalizePassives(passives) {
     return Array.isArray(passives) ? passives : [];
 }
 
+function normalizeEventTriggers(eventTriggers) {
+    if (!Array.isArray(eventTriggers)) return [];
+    return eventTriggers
+        .map(entry => String(entry || "").trim())
+        .filter(Boolean);
+}
+
 function normalizeEffectMode(mode, fallback = "once") {
     const normalized = String(mode || fallback || "once").trim().toLowerCase();
     return normalized === "turn" || normalized === "round" || normalized === "once"
@@ -53,6 +60,7 @@ export class Item {
         effectRounds = 1,
         stats = {},
         passives = [],
+        itemUseEventTriggers = [],
         storyDesc = "",
         functionDesc = "",
         desc = ""
@@ -77,6 +85,7 @@ export class Item {
         this.effectRounds = Math.max(1, toNonNegativeInt(effectRounds, 1));
         this.stats = normalizeStats(stats);
         this.passives = normalizePassives(passives);
+        this.itemUseEventTriggers = normalizeEventTriggers(itemUseEventTriggers);
         this.storyDesc = normalizedStoryDesc;
         this.desc = normalizedStoryDesc;
         this.functionDesc = String(functionDesc || "");

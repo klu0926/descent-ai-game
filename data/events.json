@@ -1,0 +1,236 @@
+{
+  "events": [
+    {
+      "id": "loop_started",
+      "name": "LOOP_STARTED",
+      "eventName": "game:loop_started",
+      "scope": "game",
+      "description": "Game loop started.",
+      "core": true
+    },
+    {
+      "id": "loop_stopped",
+      "name": "LOOP_STOPPED",
+      "eventName": "game:loop_stopped",
+      "scope": "game",
+      "description": "Game loop stopped.",
+      "core": true
+    },
+    {
+      "id": "loop_skipped",
+      "name": "LOOP_SKIPPED",
+      "eventName": "game:loop_skipped",
+      "scope": "game",
+      "description": "Game loop tick skipped.",
+      "core": true
+    },
+    {
+      "id": "turn_tick",
+      "name": "TURN_TICK",
+      "eventName": "game:turn_tick",
+      "scope": "game",
+      "description": "Main turn tick.",
+      "core": true
+    },
+    {
+      "id": "player_hit",
+      "name": "PLAYER_HIT",
+      "eventName": "combat:player_hit",
+      "scope": "game",
+      "description": "Player took damage.",
+      "core": true
+    },
+    {
+      "id": "heal_item_used",
+      "name": "HEAL_ITEM_USED",
+      "eventName": "combat:heal_item_used",
+      "scope": "game",
+      "description": "A healing consumable was used by the player.",
+      "core": true
+    },
+    {
+      "id": "player_dodge",
+      "name": "PLAYER_DODGE",
+      "eventName": "combat:player_dodge",
+      "scope": "game",
+      "description": "Player dodged an attack.",
+      "core": true
+    },
+    {
+      "id": "player_block",
+      "name": "PLAYER_BLOCK",
+      "eventName": "combat:player_block",
+      "scope": "game",
+      "description": "Player blocked an attack.",
+      "core": true
+    },
+    {
+      "id": "player_attack",
+      "name": "PLAYER_ATTACK",
+      "eventName": "combat:player_attack",
+      "scope": "game",
+      "description": "Player initiated an attack.",
+      "core": true
+    },
+    {
+      "id": "enemy_hit",
+      "name": "ENEMY_HIT",
+      "eventName": "combat:enemy_hit",
+      "scope": "game",
+      "description": "Enemy took damage.",
+      "core": true
+    },
+    {
+      "id": "enemy_dodge",
+      "name": "ENEMY_DODGE",
+      "eventName": "combat:enemy_dodge",
+      "scope": "game",
+      "description": "Enemy dodged an attack.",
+      "core": true
+    },
+    {
+      "id": "enemy_block",
+      "name": "ENEMY_BLOCK",
+      "eventName": "combat:enemy_block",
+      "scope": "game",
+      "description": "Enemy blocked an attack.",
+      "core": true
+    },
+    {
+      "id": "enemy_attack",
+      "name": "ENEMY_ATTACK",
+      "eventName": "combat:enemy_attack",
+      "scope": "game",
+      "description": "Enemy initiated an attack.",
+      "core": true
+    },
+    {
+      "id": "level_started",
+      "name": "LEVEL_STARTED",
+      "eventName": "game:level_started",
+      "scope": "game",
+      "description": "Level started.",
+      "core": true
+    },
+    {
+      "id": "battle_won",
+      "name": "BATTLE_WON",
+      "eventName": "game:battle_won",
+      "scope": "game",
+      "description": "Battle won.",
+      "core": true
+    },
+    {
+      "id": "battle_lost",
+      "name": "BATTLE_LOST",
+      "eventName": "game:battle_lost",
+      "scope": "game",
+      "description": "Battle lost.",
+      "core": true
+    },
+    {
+      "id": "combat_started",
+      "name": "COMBAT_STARTED",
+      "eventName": "combat:started",
+      "scope": "combat",
+      "description": "Combat started.",
+      "core": true
+    },
+    {
+      "id": "combat_ended",
+      "name": "COMBAT_ENDED",
+      "eventName": "combat:ended",
+      "scope": "combat",
+      "description": "Combat ended.",
+      "core": true
+    },
+    {
+      "id": "round_started",
+      "name": "ROUND_STARTED",
+      "eventName": "combat:round_started",
+      "scope": "combat",
+      "description": "Round started.",
+      "core": true
+    },
+    {
+      "id": "round_ended",
+      "name": "ROUND_ENDED",
+      "eventName": "combat:round_ended",
+      "scope": "combat",
+      "description": "Round ended.",
+      "core": true
+    },
+    {
+      "id": "turn_started",
+      "name": "TURN_STARTED",
+      "eventName": "combat:turn_started",
+      "scope": "combat",
+      "description": "Combat turn started.",
+      "core": true
+    },
+    {
+      "id": "turn_ended",
+      "name": "TURN_ENDED",
+      "eventName": "combat:turn_ended",
+      "scope": "combat",
+      "description": "Combat turn ended.",
+      "core": true
+    },
+    {
+      "id": "action_declared",
+      "name": "ACTION_DECLARED",
+      "eventName": "combat:action_declared",
+      "scope": "combat",
+      "description": "Action declared.",
+      "core": true
+    },
+    {
+      "id": "action_resolved",
+      "name": "ACTION_RESOLVED",
+      "eventName": "combat:action_resolved",
+      "scope": "combat",
+      "description": "Action resolved.",
+      "core": true
+    },
+    {
+      "id": "damage_applied",
+      "name": "DAMAGE_APPLIED",
+      "eventName": "combat:damage_applied",
+      "scope": "combat",
+      "description": "Damage applied.",
+      "core": true
+    },
+    {
+      "id": "heal_applied",
+      "name": "HEAL_APPLIED",
+      "eventName": "combat:heal_applied",
+      "scope": "combat",
+      "description": "Heal applied.",
+      "core": true
+    },
+    {
+      "id": "character_defeated",
+      "name": "CHARACTER_DEFEATED",
+      "eventName": "combat:character_defeated",
+      "scope": "combat",
+      "description": "Character defeated.",
+      "core": true
+    },
+    {
+      "id": "status_applied",
+      "name": "STATUS_APPLIED",
+      "eventName": "combat:status_applied",
+      "scope": "combat",
+      "description": "Status applied.",
+      "core": true
+    },
+    {
+      "id": "status_expired",
+      "name": "STATUS_EXPIRED",
+      "eventName": "combat:status_expired",
+      "scope": "combat",
+      "description": "Status expired.",
+      "core": true
+    }
+  ]
+}

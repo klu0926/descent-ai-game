@@ -1,4 +1,9 @@
 import { getItemImage, getItemTempIcon } from "../items/item.js";
+import {
+    getEssenceTooltip,
+    getEmptyConsumableSlotTooltip,
+    getEmptyGearSlotTooltip
+} from "./components/inventoryTooltips/inventoryTooltips.js";
 
 export function createUIRefs() {
     return {
@@ -11,6 +16,7 @@ export function createUIRefs() {
         uiPlayerAim: document.getElementById("player-aim"),
         uiPlayerAvatar: document.getElementById("player-avatar"),
         uiSkillsReadout: document.getElementById("player-skills"),
+        uiEnemySkillsReadout: document.getElementById("enemy-skills"),
         uiEnemyName: document.getElementById("enemy-name"),
         uiEnemyHpBar: document.getElementById("enemy-hp-bar"),
         uiEnemyHpText: document.getElementById("enemy-hp-text"),
@@ -27,6 +33,7 @@ export function createUIRefs() {
         uiLevelDisplay: document.getElementById("current-level"),
         uiTurnDisplay: document.getElementById("current-turn"),
         uiArenaLevelWarning: document.getElementById("arena-level-warning"),
+        overallBlackFadeOverlay: document.getElementById("overall-black-fade"),
         roundStartBtn: document.getElementById("round-start-btn"),
         roundTransitionOverlay: document.getElementById("round-transition-overlay"),
         overlay: document.getElementById("overlay"),
@@ -36,24 +43,17 @@ export function createUIRefs() {
         lootLeaveBtn: document.getElementById("loot-leave-btn"),
         tutorialOverlay: document.getElementById("tutorial-overlay"),
         pauseOverlay: document.getElementById("pause-overlay"),
-        playVoiceBtn: document.getElementById("play-voice-btn"),
         startJourneyBtn: document.getElementById("start-journey-btn"),
         eqReadout: document.getElementById("eq-readout"),
         infoTooltip: document.getElementById("info-tooltip"),
         bgMusic: document.getElementById("bg-music"),
-        gatekeeperVoiceAudio: document.getElementById("gatekeeper-voice"),
         musicBtn: document.getElementById("music-toggle-btn"),
         pauseBtn: document.getElementById("pause-toggle-btn"),
         skillTreeBtn: document.getElementById("skill-tree-btn"),
         cheatBtn: document.getElementById("cheat-btn"),
         pauseResumeBtn: document.getElementById("pause-resume-btn"),
         editorPageBtn: document.getElementById("editor-page-btn"),
-        uiPlayerExpBar: document.getElementById("player-exp-bar"),
-        uiPlayerExpText: document.getElementById("player-exp-text"),
         uiPlayerName: document.getElementById("player-name"),
-        levelupOverlay: document.getElementById("levelup-overlay"),
-        levelupDesc: document.getElementById("levelup-desc"),
-        levelupCloseBtn: document.getElementById("levelup-close-btn"),
         skillTreeOverlay: document.getElementById("skill-tree-overlay"),
         skillTreeSections: document.getElementById("skill-tree-sections"),
         skillTreeStatus: document.getElementById("skill-tree-status"),
@@ -164,22 +164,14 @@ export function triggerScreenShake(isBlockedByOverlay) {
         document.querySelector(".top-controls"),
         document.querySelector(".arena-hud")
     ].filter(Boolean);
-    const expShakeTarget = document.getElementById("exp-shake-wrap");
 
     shakeTargets.forEach(element => {
         element.classList.remove("anim-shake");
         void element.offsetWidth;
         element.classList.add("anim-shake");
     });
-    if (expShakeTarget) {
-        expShakeTarget.classList.remove("anim-exp-shake");
-        void expShakeTarget.offsetWidth;
-        expShakeTarget.classList.add("anim-exp-shake");
-    }
-
     setTimeout(() => {
         shakeTargets.forEach(element => element.classList.remove("anim-shake"));
-        if (expShakeTarget) expShakeTarget.classList.remove("anim-exp-shake");
     }, 250);
 }
 
@@ -220,16 +212,12 @@ export function setArenaLevelWarning({ element, message }) {
     element.classList.toggle("hidden", !text);
 }
 
-export function updateExpUI({ uiPlayerExpBar, uiPlayerExpText, uiPlayerName, playerInfo, currentGameStats, classes, getPlayerExpPercent }) {
-    if (uiPlayerExpBar) {
-        uiPlayerExpBar.style.width = `${getPlayerExpPercent(playerInfo)}%`;
-        uiPlayerExpText.innerText = `${playerInfo.exp} / ${playerInfo.maxExp}`;
-    }
+export function updatePlayerNameUI({ uiPlayerName, currentGameStats, classes }) {
     if (uiPlayerName) {
         const activeClassName = (currentGameStats.selectedClassId && classes[currentGameStats.selectedClassId])
             ? classes[currentGameStats.selectedClassId].name
             : "Adventurer";
-        uiPlayerName.innerText = `Lv.${playerInfo.lvl} ${activeClassName}`;
+        uiPlayerName.innerText = `${activeClassName}`;
     }
 }
 
@@ -251,6 +239,7 @@ export function clearEnemyDisplay({
     uiEnemyAim,
     uiEnemyHpContainer,
     uiEnemyStatsPanel,
+    uiEnemySkillsReadout,
     eqReadout,
     defaultReadoutHtml,
     resetEqReadoutBackground
@@ -270,9 +259,126 @@ export function clearEnemyDisplay({
     uiEnemyAim.innerText = "";
     if (uiEnemyHpContainer) uiEnemyHpContainer.style.visibility = "hidden";
     if (uiEnemyStatsPanel) uiEnemyStatsPanel.style.visibility = "hidden";
+    if (uiEnemySkillsReadout) uiEnemySkillsReadout.innerHTML = "";
     if (uiEnemyAvatar) uiEnemyAvatar.style.visibility = "hidden";
     if (eqReadout) eqReadout.innerHTML = defaultReadoutHtml;
     resetEqReadoutBackground();
+}
+
+function getSkillInitials(name = "") {
+    const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+    if (words.length <= 0) return "?";
+    if (words.length === 1) return words[0].slice(0, 1).toUpperCase();
+    return `${words[0][0]}${words[1][0]}`.toUpperCase();
+}
+
+function escapeHtml(value) {
+    return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+function highlightValueToken(text) {
+    const escaped = escapeHtml(text);
+    const withTokenHighlight = escaped.replace(/\[(value|chance)\]/gi, '<span class="skill-token-value">[$1]</span>');
+    return withTokenHighlight.replace(/(^|[^a-zA-Z0-9_])([+-]?\d+(?:\.\d+)?%?)(?=$|[^a-zA-Z0-9_])/g, "$1<span class=\"skill-token-value\">$2</span>");
+}
+
+function normalizeReadoutSkills(skills) {
+    if (!Array.isArray(skills)) return [];
+    return skills
+        .filter(skill => skill && typeof skill === "object")
+        .map(skill => ({
+            id: String(skill.id || skill.name || "").trim(),
+            name: String(skill.name || skill.id || "Skill").trim(),
+            image: String(skill.image || "").trim(),
+            rank: Number.isFinite(Number(skill.rank)) ? Number(skill.rank) : 0,
+            desc: String(skill.desc || skill.note || "").trim(),
+            kind: String(skill.kind || skill.skillType || "").trim().toLowerCase()
+        }))
+        .filter(skill => skill.id);
+}
+
+function ensureCombatSkillTooltip() {
+    let tooltip = document.getElementById("combat-skill-tooltip");
+    if (tooltip) return tooltip;
+    tooltip = document.createElement("div");
+    tooltip.id = "combat-skill-tooltip";
+    tooltip.className = "info-tooltip hidden combat-skill-tooltip";
+    document.body.appendChild(tooltip);
+    return tooltip;
+}
+
+function showCombatSkillTooltip(skill, x, y) {
+    const tooltip = ensureCombatSkillTooltip();
+    const title = skill.rank > 1 ? `${skill.name} (Rank ${skill.rank})` : skill.name;
+    const desc = String(skill.desc || "").trim();
+    tooltip.innerHTML = desc
+        ? `<div class="skill-tooltip-title">${escapeHtml(title)}</div><div class="skill-tooltip-desc">${highlightValueToken(desc)}</div>`
+        : `<div class="skill-tooltip-title">${escapeHtml(title)}</div>`;
+    tooltip.classList.remove("hidden");
+    const rect = tooltip.getBoundingClientRect();
+    const viewportW = window.innerWidth || document.documentElement.clientWidth || 1280;
+    const viewportH = window.innerHeight || document.documentElement.clientHeight || 720;
+    const nextLeft = Math.min(Math.max(10, x + 14), Math.max(10, viewportW - rect.width - 10));
+    const nextTop = Math.min(Math.max(10, y + 14), Math.max(10, viewportH - rect.height - 10));
+    tooltip.style.left = `${nextLeft}px`;
+    tooltip.style.top = `${nextTop}px`;
+}
+
+function hideCombatSkillTooltip() {
+    const tooltip = document.getElementById("combat-skill-tooltip");
+    if (!tooltip) return;
+    tooltip.classList.add("hidden");
+}
+
+function renderSingleReadout(container, skills, side = "player") {
+    if (!container) return;
+    container.innerHTML = "";
+    container.classList.toggle("skills-readout-enemy", side === "enemy");
+    const normalized = normalizeReadoutSkills(skills);
+    normalized.forEach(skill => {
+        const chip = document.createElement("div");
+        chip.className = "combat-skill-chip";
+        if (skill.kind === "debuff") chip.classList.add("is-debuff");
+        else if (skill.kind === "buff") chip.classList.add("is-buff");
+        else if (skill.kind === "passive") chip.classList.add("is-passive");
+        chip.title = skill.rank > 1 ? `${skill.name} (Rank ${skill.rank})` : skill.name;
+        chip.addEventListener("mouseenter", event => {
+            showCombatSkillTooltip(skill, event.clientX, event.clientY);
+        });
+        chip.addEventListener("mousemove", event => {
+            showCombatSkillTooltip(skill, event.clientX, event.clientY);
+        });
+        chip.addEventListener("mouseleave", () => {
+            hideCombatSkillTooltip();
+        });
+        if (skill.image) {
+            chip.style.backgroundImage = `url("${skill.image.replace(/"/g, '\\"')}")`;
+            chip.classList.add("has-image");
+        } else {
+            chip.textContent = getSkillInitials(skill.name);
+        }
+        if (skill.rank > 1) {
+            const rankBadge = document.createElement("span");
+            rankBadge.className = "combat-skill-rank";
+            rankBadge.textContent = `${skill.rank}`;
+            chip.appendChild(rankBadge);
+        }
+        container.appendChild(chip);
+    });
+}
+
+export function renderCombatSkillReadouts({
+    playerContainer,
+    enemyContainer,
+    playerSkills,
+    enemySkills
+}) {
+    renderSingleReadout(playerContainer, playerSkills, "player");
+    renderSingleReadout(enemyContainer, enemySkills, "enemy");
 }
 
 export function showEnemyDisplay({ uiEnemyName, uiEnemyHpContainer, uiEnemyStatsPanel, uiEnemyAvatar, uiEnemyInfo }) {
@@ -294,6 +400,11 @@ export function updatePlayerUI({ uiPlayerAtk, uiPlayerDef, uiPlayerCrit, uiPlaye
     uiPlayerHpText.innerText = `${playerInfo.hp} / ${playerInfo.maxHp}`;
     const headerHp = document.getElementById("header-hp");
     if (headerHp) headerHp.innerText = `${playerInfo.hp}/${playerInfo.maxHp}`;
+    const essenceValue = document.getElementById("essence-value");
+    if (essenceValue) {
+        const essence = Math.max(0, Math.floor(Number(playerInfo.essence) || 0));
+        essenceValue.innerText = `${essence}`;
+    }
     uiPlayerHpBar.style.background = hpPct < 30
         ? "linear-gradient(to bottom, #b63a3a, #5a1212)"
         : "linear-gradient(to bottom, #9a2f2f, #4b0f0f)";
@@ -374,29 +485,6 @@ export function resetEqReadoutBackground(eqReadout) {
     eqReadout.style.imageRendering = "";
 }
 
-export function showInfoTooltip({ infoTooltip, html, x, y, side = "right", vertical = "below" }) {
-    if (!infoTooltip) return;
-    infoTooltip.innerHTML = html;
-    infoTooltip.classList.remove("hidden");
-    if (side === "left") {
-        const width = infoTooltip.offsetWidth || 320;
-        infoTooltip.style.left = `${x - width - 16}px`;
-    } else {
-        infoTooltip.style.left = `${x + 16}px`;
-    }
-    if (vertical === "above") {
-        const height = infoTooltip.offsetHeight || 120;
-        infoTooltip.style.top = `${y - height - 12}px`;
-    } else {
-        infoTooltip.style.top = `${y + 12}px`;
-    }
-}
-
-export function hideInfoTooltip(infoTooltip) {
-    if (!infoTooltip) return;
-    infoTooltip.classList.add("hidden");
-}
-
 export function bindCombatStatTooltips({
     uiPlayerAtk,
     uiPlayerDef,
@@ -471,79 +559,15 @@ export function showEnemyInfo(currentEnemy) {
     `;
 }
 
-export function showPassiveInfo({ passive, eqReadout }) {
-    resetEqReadoutBackground(eqReadout);
-    document.querySelectorAll(".grid-item").forEach(element => element.classList.remove("active"));
-    document.querySelectorAll(".passive-icon").forEach(element => element.classList.remove("active"));
-    const activeIcon = Array.from(document.querySelectorAll(".passive-icon")).find(icon => icon.title === passive.name);
-    if (activeIcon) activeIcon.classList.add("active");
-
-    eqReadout.innerHTML = `
-        <div class="slot-item-name golden-text" style="font-size: 1.2rem; border-bottom: 1px solid var(--border-gold-dim); padding-bottom: 5px; margin-bottom: 8px;">${passive.name}</div>
-        <div class="slot-item-stats" style="font-size: 1.15rem; color: var(--text-highlight); font-weight: bold; margin-bottom: 8px;">Passive Skill${passive.count > 1 ? ` x${passive.count}` : ""}</div>
-        <div class="slot-item-desc" style="color: #ffffff; font-size: 1rem; line-height: 1.4;">${passive.desc}</div>
-    `;
-}
-
-export function showItemInfo({ item, isConsumable = false, gearSlotKey = "", gearSlotLabels, formatStats, consumableEffectNotes = [] }) {
-    if (!item) return "";
-    const itemName = item.name || "Unnamed Item";
-    const itemRarity = item.rarity || "common";
-    const healAmount = Number(item.healAmount);
-    const healPercent = Number(item.healPercent);
-    const classEffectParts = [];
-    if (Number.isFinite(healAmount) && healAmount > 0) classEffectParts.push(`Healing +${Math.floor(healAmount)} HP`);
-    if (Number.isFinite(healPercent) && healPercent > 0) classEffectParts.push(`Healing ${Math.floor(healPercent * 100)}%`);
-    const effectMode = String(item.effectMode || "").trim().toLowerCase();
-    if (effectMode === "turn") {
-        const turns = Math.max(1, Math.floor(Number(item.effectTurns) || 1));
-        classEffectParts.push(`${turns} turn${turns > 1 ? "s" : ""}`);
-    } else if (effectMode === "round") {
-        const rounds = Math.max(1, Math.floor(Number(item.effectRounds) || 1));
-        classEffectParts.push(`${rounds} round${rounds > 1 ? "s" : ""}`);
-    } else if (effectMode === "once") {
-        classEffectParts.push("Once");
-    }
-    const classEffectText = classEffectParts.join(" | ");
-    const useHint = item.rewardType === "consumable"
-        ? `<div style="margin-top: 8px; color: var(--text-highlight); font-size: 0.95rem;">Right-click this item to drink.</div>`
-        : "";
-    const slotHint = !isConsumable && gearSlotKey
-        ? `<div style="margin-top: 8px; color: var(--text-muted); font-size: 0.92rem;">Slot: ${gearSlotLabels[gearSlotKey]}</div>`
-        : "";
-
-    const passivesHtml = (item.passives || []).map(passive => `<div style="margin-top: 5px; font-size: 1.05rem;">&#10024; <strong style="color:#eab308;">${passive.name}</strong>: ${passive.desc}</div>`).join("");
-    const effectNotesHtml = (consumableEffectNotes || []).map(entry => {
-        const color = entry.kind === "debuff" ? "#fca5a5" : "#86efac";
-        const source = entry.source ? `${entry.source}: ` : "";
-        return `<div class="slot-item-desc" style="color: ${color}; font-size: 0.95rem; line-height: 1.35; margin-top: 6px;">${source}${entry.text}</div>`;
-    }).join("");
-    return `
-        <div class="slot-item-name rarity-${itemRarity}" style="font-size: 1.2rem; border-bottom: 1px solid var(--border-gold-dim); padding-bottom: 5px; margin-bottom: 8px;">${itemName}</div>
-        <div class="slot-item-stats" style="font-size: 1.1rem; color: var(--text-green); font-weight: bold; margin-bottom: 8px;">${formatStats(item.stats)}</div>
-        <div class="slot-item-desc" style="color: #ffffff; font-size: 1rem; line-height: 1.4;">${item.storyDesc || item.desc}</div>
-        ${classEffectText ? `<div class="slot-item-stats" style="font-size: 1.05rem; color: var(--text-green); font-weight: bold; margin-top: 6px;">${classEffectText}</div>` : ""}
-        ${!classEffectText && item.functionDesc ? `<div class="slot-item-stats" style="font-size: 1.05rem; color: var(--text-green); font-weight: bold; margin-top: 6px;">${item.functionDesc}</div>` : ""}
-        ${effectNotesHtml}
-        ${slotHint}
-        ${useHint}
-        <div style="line-height: 1.4;">${passivesHtml}</div>
-    `;
-}
-
 export function renderEquipment({
     playerInfo,
     gearSlotOrder,
     gearSlotLabels,
     consumableSlotCount,
-    uiSkillsReadout,
-    getPassiveShortLabel,
-    playSound,
     consumeInventoryItem,
     showInfoTooltipFn,
     hideInfoTooltipFn,
-    showItemInfoFn,
-    showPassiveInfoFn
+    showItemInfoFn
 }) {
     const GEAR_PLACEHOLDER_ICONS = {
         helmet: "resources/images/UI/gear_ui/helmet.png",
@@ -560,20 +584,28 @@ export function renderEquipment({
         return GEAR_PLACEHOLDER_ICONS[slotKey] || "";
     }
 
-    function getEmptyGearSlotTooltip(slotKey) {
-        const slotLabel = gearSlotLabels[slotKey] || "Unknown";
-        return `<div class="stat-tip-text">Slot: ${slotLabel}</div>`;
-    }
-
-    function getEmptyConsumableSlotTooltip() {
-        return `<div class="stat-tip-text">Slot: Consumable</div>`;
-    }
-
     const gearGrid = document.getElementById("gear-grid");
     const consumableGrid = document.getElementById("inventory-grid");
+    const essenceCell = document.getElementById("essence-cell");
+    const essenceValue = document.getElementById("essence-value");
     if (gearGrid) gearGrid.innerHTML = "";
     if (consumableGrid) consumableGrid.innerHTML = "";
-    const allPassivesMap = new Map();
+    const essenceAmount = Math.max(0, Math.floor(Number(playerInfo.essence) || 0));
+
+    if (essenceValue) {
+        essenceValue.innerText = `${essenceAmount}`;
+    }
+    if (essenceCell) {
+        essenceCell.onmouseover = event => {
+            showInfoTooltipFn(getEssenceTooltip(essenceAmount), event.clientX, event.clientY, "right", "above");
+        };
+        essenceCell.onmousemove = event => {
+            showInfoTooltipFn(getEssenceTooltip(essenceAmount), event.clientX, event.clientY, "right", "above");
+        };
+        essenceCell.onmouseout = () => {
+            hideInfoTooltipFn();
+        };
+    }
 
     gearSlotOrder.forEach(slotKey => {
         const item = playerInfo.gearSlots[slotKey];
@@ -594,11 +626,6 @@ export function renderEquipment({
             slot.onmouseout = () => {
                 hideInfoTooltipFn();
             };
-            (item.passives || []).forEach(passive => {
-                const existing = allPassivesMap.get(passive.name);
-                if (existing) existing.count += 1;
-                else allPassivesMap.set(passive.name, { ...passive, count: 1 });
-            });
         } else {
             slot.classList.add("empty");
             slot.classList.add("gear-slot-empty");
@@ -610,10 +637,10 @@ export function renderEquipment({
             }
             slot.innerText = "";
             slot.onmouseover = event => {
-                showInfoTooltipFn(getEmptyGearSlotTooltip(slotKey), event.clientX, event.clientY, "right", "above");
+                showInfoTooltipFn(getEmptyGearSlotTooltip({ gearSlotKey: slotKey, gearSlotLabels }), event.clientX, event.clientY, "right", "above");
             };
             slot.onmousemove = event => {
-                showInfoTooltipFn(getEmptyGearSlotTooltip(slotKey), event.clientX, event.clientY, "right", "above");
+                showInfoTooltipFn(getEmptyGearSlotTooltip({ gearSlotKey: slotKey, gearSlotLabels }), event.clientX, event.clientY, "right", "above");
             };
             slot.onmouseout = () => {
                 hideInfoTooltipFn();
@@ -657,18 +684,4 @@ export function renderEquipment({
         if (consumableGrid) consumableGrid.appendChild(slot);
     }
 
-    uiSkillsReadout.innerHTML = "";
-
-    Array.from(allPassivesMap.values()).forEach(passive => {
-        const icon = document.createElement("button");
-        icon.className = "passive-icon";
-        icon.type = "button";
-        icon.title = passive.name;
-        icon.innerHTML = `${getPassiveShortLabel(passive.name)}${passive.count > 1 ? `<span class="passive-count">${passive.count}</span>` : ""}`;
-        icon.onclick = () => {
-            playSound("pick");
-            showPassiveInfoFn(passive);
-        };
-        uiSkillsReadout.appendChild(icon);
-    });
 }

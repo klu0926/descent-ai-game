@@ -1,13 +1,12 @@
 import { createEnemy, createEnemyFromId } from "./enemyGenerator.js";
 import { generateLootOptions } from "./itemGenerator.js";
-import { getExpNeeded, checkLevelUp, getPlayerExpPercent } from "./levelSystem.js";
 import {
     applySkillTreeAttackHealing as applySkillTreeAttackHealingFromModule,
     getSkillTreeRegenRate as getSkillTreeRegenRateFromModule,
     getSkillTreeStatBonuses as getSkillTreeStatBonusesFromModule,
     onPlayerSuccessfulHit as onPlayerSuccessfulHitFromModule
-} from "./combat/skillCombatSystem.js";
-import { createCombatSystem } from "./combat/combatSetup.js";
+} from "../combat/legacy/skillCombatSystem.js";
+import { createCombatSystem } from "../combat/legacy/combatSetup.js";
 import {
     createEmptyGearSlots as createEmptyGearSlotsFromPlayerModule,
     getPlayerAvatarSrc as getPlayerAvatarSrcFromPlayerModule,
@@ -22,26 +21,24 @@ import {
     selectLoot as selectLootFromModule
 } from "./loot/lootSystem.js";
 import {
-    applyClassLevelUpGrowth as applyClassLevelUpGrowthFromModule,
     getClassDefaultStats as getClassDefaultStatsFromModule,
-    getClassLevelUpGrowth as getClassLevelUpGrowthFromModule,
     recalculateStats as recalculateStatsFromModule,
     tryDodge as tryDodgeFromModule
 } from "./playerSystem.js";
 import {
     formatStats as formatStatsFromModule,
-    getPassiveShortLabel as getPassiveShortLabelFromModule,
     getRewardStatsText as getRewardStatsTextFromModule
 } from "./rewardSystem.js";
 import {
     rollChance as rollChanceFromModule,
     rollDamage as rollDamageFromModule
-} from "./randomSystem.js";
-import { CURRENT_GAME_STATS, createInitialCheatOverrides } from "./current_game_stats.js";
-import { CLASSES } from "../entity/player_class/player_class.js";
+} from "../core/randomSystem.js";
+import { CURRENT_GAME_STATS, createInitialCheatOverrides } from "../core/gameState.js";
+import { CLASSES } from "../content/classes/index.js";
+import { SkillTree } from "../entity/player_class/skillTree.js";
 import { createSmallPotion } from "../items/consumable/consumable.js";
-import { createAudioSystem } from "../audio/audioSystem.js";
-import { GAME_EVENTS, createEventBus } from "../event/eventBus.js";
+import { createAudioSystem } from "../resources/audio/audioSystem.js";
+import { GAME_EVENTS, createEventBus } from "../core/eventBus.js";
 import { GearItem } from "../items/item.js";
 import {
     applyEnemySize as applyEnemySizeFromUI,
@@ -49,9 +46,9 @@ import {
     clearScreenSpaceEffects as clearScreenSpaceEffectsFromUI,
     createUIRefs,
     floatText as floatTextFromUI,
-    hideInfoTooltip as hideInfoTooltipFromUI,
     isAnyFullscreenOverlayVisible as isAnyFullscreenOverlayVisibleFromUI,
     mountFullscreenOverlaysToBody as mountFullscreenOverlaysToBodyFromUI,
+    renderCombatSkillReadouts as renderCombatSkillReadoutsFromUI,
     renderEquipment as renderEquipmentFromUI,
     resetEqReadoutBackground as resetEqReadoutBackgroundFromUI,
     setPauseState as setPauseStateFromUI,
@@ -60,19 +57,21 @@ import {
     showEnemyDisplay as showEnemyDisplayFromUI,
     showEnemyInfo as showEnemyInfoFromUI,
     showHitCut as showHitCutFromUI,
-    showInfoTooltip as showInfoTooltipFromUI,
-    showItemInfo as showItemInfoFromUI,
-    showPassiveInfo as showPassiveInfoFromUI,
     startAvatarBlurPulses as startAvatarBlurPulsesFromUI,
     triggerAnimation as triggerAnimationFromUI,
     triggerCritFlash as triggerCritFlashFromUI,
     triggerDodgeAnimation as triggerDodgeAnimationFromUI,
     triggerScreenShake as triggerScreenShakeFromUI,
     updateEnemyUI as updateEnemyUIFromUI,
-    updateExpUI as updateExpUIFromUI,
+    updatePlayerNameUI as updatePlayerNameUIFromUI,
     updatePlayerUI as updatePlayerUIFromUI,
     bindCombatStatTooltips as bindCombatStatTooltipsFromUI
 } from "../UI/gameUI.js";
+import {
+    hideInfoTooltip as hideInfoTooltipFromUI,
+    showInfoTooltip as showInfoTooltipFromUI,
+    showItemInfo as showItemInfoFromUI
+} from "../UI/components/inventoryTooltips/inventoryTooltips.js";
 import {
     hideSkillTooltip as hideSkillTooltipFromSkillTreeUI,
     renderSkillTree as renderSkillTreeFromUI,
@@ -110,8 +109,8 @@ import {
     shouldTriggerSurvivalist as shouldTriggerSurvivalistFromModule
 } from "../skills/passive_runtime.js";
 import { createPassiveSkillManager } from "../skills/passive_skill_manager.js";
-import { ENEMY_SIZE_TO_PX } from "../entity/enemy_class/enemy_type_data.js";
-import { DEFAULT_LEVEL_ID, getLevelById } from "../level/level.js";
+import { ENEMY_SIZE_TO_PX } from "../content/enemies/enemyTypeData.js";
+import { DEFAULT_LEVEL_ID, getLevelById } from "../content/levels/level.js";
 
 const currentGameStats = CURRENT_GAME_STATS;
 const playerInfo = currentGameStats.playerInfo;
@@ -140,8 +139,8 @@ const audioSystem = createAudioSystem();
 const gameEventBus = createEventBus();
 const HIT_CUT_SRC = "resources/images/effects/cut.png";
 const FIRE_EFFECT_SRC = "resources/images/effects/fire.png";
-const INTRO_MUSIC_SRC = "resources/music/joelfazhari-stalking-my-next-victim.mp3";
-const BATTLE_MUSIC_SRC = "resources/music/stereo_color-battle-drum-493709.mp3";
+const INTRO_MUSIC_SRC = "resources/audio/music/joelfazhari-stalking-my-next-victim.mp3";
+const BATTLE_MUSIC_SRC = "resources/audio/music/stereo_color-battle-drum-493709.mp3";
 
 function toPositiveInt(value, fallback = 1) {
     const parsed = Number(value);
@@ -162,8 +161,10 @@ function getResolvedLevelAndRound(levelId, roundNumber) {
             missingLevelObject: true
         };
     }
-    const rounds = Array.isArray(levelData.rounds) ? levelData.rounds : [];
-    if (rounds.length <= 0) {
+    const scenes = Array.isArray(levelData.scenes)
+        ? levelData.scenes
+        : (Array.isArray(levelData.rounds) ? levelData.rounds : []);
+    if (scenes.length <= 0) {
         return {
             levelData,
             roundData: null,
@@ -173,18 +174,18 @@ function getResolvedLevelAndRound(levelId, roundNumber) {
         };
     }
     const requestedIndex = requestedRound - 1;
-    const requestedRoundData = rounds[requestedIndex] && typeof rounds[requestedIndex] === "object"
-        ? rounds[requestedIndex]
+    const requestedRoundData = scenes[requestedIndex] && typeof scenes[requestedIndex] === "object"
+        ? scenes[requestedIndex]
         : null;
     let fallbackRoundIndex = -1;
-    for (let index = rounds.length - 1; index >= 0; index -= 1) {
-        const candidate = rounds[index];
+    for (let index = scenes.length - 1; index >= 0; index -= 1) {
+        const candidate = scenes[index];
         if (candidate && typeof candidate === "object") {
             fallbackRoundIndex = index;
             break;
         }
     }
-    const fallbackRoundData = fallbackRoundIndex >= 0 ? rounds[fallbackRoundIndex] : null;
+    const fallbackRoundData = fallbackRoundIndex >= 0 ? scenes[fallbackRoundIndex] : null;
     const roundData = requestedRoundData || fallbackRoundData || null;
     const resolvedRound = requestedRoundData
         ? requestedRound
@@ -203,6 +204,20 @@ function getRoundEnemyId(levelId, roundNumber) {
     const { roundData } = getResolvedLevelAndRound(levelId, roundNumber);
     const enemyId = roundData && typeof roundData.enemy === "string" ? roundData.enemy.trim() : "";
     return enemyId || null;
+}
+
+function getRoundType(levelId, roundNumber) {
+    const { roundData } = getResolvedLevelAndRound(levelId, roundNumber);
+    const rawType = String(roundData && roundData.type || "fight").trim().toLowerCase();
+    if (rawType === "cutscene" || rawType === "vendor" || rawType === "fight") return rawType;
+    if (rawType === "event") return "cutscene";
+    return "fight";
+}
+
+function getRoundCutsceneVideo(levelId, roundNumber) {
+    const { roundData } = getResolvedLevelAndRound(levelId, roundNumber);
+    const videoPath = roundData && typeof roundData.cutsceneVideo === "string" ? roundData.cutsceneVideo.trim() : "";
+    return videoPath || null;
 }
 
 function getRoundBackgroundPath(levelId, roundNumber) {
@@ -235,6 +250,7 @@ const {
     uiPlayerAim,
     uiPlayerAvatar,
     uiSkillsReadout,
+    uiEnemySkillsReadout,
     uiEnemyName,
     uiEnemyHpBar,
     uiEnemyHpText,
@@ -251,6 +267,7 @@ const {
     uiLevelDisplay,
     uiTurnDisplay,
     uiArenaLevelWarning,
+    overallBlackFadeOverlay,
     roundStartBtn,
     roundTransitionOverlay,
     overlay,
@@ -260,24 +277,17 @@ const {
     lootLeaveBtn,
     tutorialOverlay,
     pauseOverlay,
-    playVoiceBtn,
     startJourneyBtn,
     eqReadout,
     infoTooltip,
     bgMusic,
-    gatekeeperVoiceAudio,
     musicBtn,
     pauseBtn,
     skillTreeBtn,
     cheatBtn,
     pauseResumeBtn,
     editorPageBtn,
-    uiPlayerExpBar,
-    uiPlayerExpText,
     uiPlayerName,
-    levelupOverlay,
-    levelupDesc,
-    levelupCloseBtn,
     skillTreeOverlay,
     skillTreeSections,
     skillTreeStatus,
@@ -306,7 +316,7 @@ const {
 
 const DEFAULT_READOUT_HTML = "";
 
-const FALLBACK_SKILL_TREE = { maxLevel: 20, sections: [], nodes: [] };
+const FALLBACK_SKILL_TREE = new SkillTree({ maxLevel: 20, sections: [], nodes: [] });
 
 function getActivePlayerClass() {
     if (currentGameStats.selectedClassId && CLASSES[currentGameStats.selectedClassId]) {
@@ -321,19 +331,23 @@ function getActiveSkillTreeConfig() {
     return FALLBACK_SKILL_TREE;
 }
 
-function getMaxPlayerLevel() {
-    return getActiveSkillTreeConfig().maxLevel || 20;
-}
-
 function getSkillTreeSections() {
-    return getActiveSkillTreeConfig().sections || [];
+    const skillTree = getActiveSkillTreeConfig();
+    if (typeof skillTree.getSections === "function") return skillTree.getSections();
+    return skillTree.sections || [];
 }
 
 function getSkillTreeNodes() {
-    return getActiveSkillTreeConfig().nodes || [];
+    const skillTree = getActiveSkillTreeConfig();
+    if (typeof skillTree.getNodes === "function") return skillTree.getNodes();
+    return skillTree.nodes || [];
 }
 
 function getSkillTreeById() {
+    const skillTree = getActiveSkillTreeConfig();
+    if (typeof skillTree.getNodeById === "function") {
+        return new Map(getSkillTreeNodes().map(node => [node.id, skillTree.getNodeById(node.id)]));
+    }
     return new Map(getSkillTreeNodes().map(node => [node.id, node]));
 }
 
@@ -380,26 +394,50 @@ const passiveSkillManager = createPassiveSkillManager({
         playerInfo,
         getSkillRank,
         createSmallPotion,
-        floatText
+        floatText,
+        eventBus: gameEventBus,
+        GAME_EVENTS,
+        getSkillById: skillId => getSkillTreeById().get(String(skillId || "").trim()) || null,
+        syncEffectState: () => syncEffectState()
     }
 });
 
 function getTotalSkillSpent() {
+    const skillTree = getActiveSkillTreeConfig();
+    if (typeof skillTree.getTotalSkillSpent === "function") {
+        return skillTree.getTotalSkillSpent(getSkillRank);
+    }
     return getSkillTreeNodes().reduce((sum, node) => sum + getSkillRank(node.id), 0);
 }
 
 function getSectionPointRequirement(sectionId) {
+    const skillTree = getActiveSkillTreeConfig();
+    if (typeof skillTree.getSectionPointRequirement === "function") {
+        return skillTree.getSectionPointRequirement(sectionId);
+    }
     const section = getSkillTreeSections().find(entry => entry.id === sectionId);
     if (!section) return Number.MAX_SAFE_INTEGER;
     return section.requiredTreePoints || 0;
 }
 
 function isSectionUnlocked(sectionId) {
+    const skillTree = getActiveSkillTreeConfig();
+    if (typeof skillTree.isSectionUnlocked === "function") {
+        return skillTree.isSectionUnlocked(sectionId, getSkillRank);
+    }
     return getTotalSkillSpent() >= getSectionPointRequirement(sectionId);
 }
 
 function canSpendSkillPoint(node) {
     if (!node) return false;
+    const skillTree = getActiveSkillTreeConfig();
+    if (typeof skillTree.canSpendSkillPoint === "function") {
+        return skillTree.canSpendSkillPoint({
+            skillId: node.id,
+            playerInfo,
+            getSkillRank
+        });
+    }
     if (playerInfo.skillPoints <= 0) return false;
     if (!isSectionUnlocked(node.section)) return false;
     if (getSkillRank(node.id) >= node.maxRank) return false;
@@ -416,7 +454,6 @@ function renderSkillTree() {
         skillTreeStatusElement: skillTreeStatus,
         skillTreePortraitElement: skillTreePortrait,
         playerInfo,
-        maxPlayerLevel: getMaxPlayerLevel(),
         skillTreeSections: getSkillTreeSections(),
         skillTreeNodes: getSkillTreeNodes(),
         getSkillRank,
@@ -433,16 +470,25 @@ function spendSkillPoint(skillId) {
     if (!canSpendSkillPoint(node)) return false;
 
     const classRanks = ensureActiveClassSkillRanks();
-    classRanks[skillId] = getSkillRank(skillId) + 1;
-    playerInfo.skillPoints -= 1;
-    if (playerInfo.lvl < getMaxPlayerLevel()) {
-        playerInfo.lvl += 1;
-        playerInfo.maxExp = getExpNeeded(playerInfo.lvl);
-    }
+    const skillTree = getActiveSkillTreeConfig();
+    const spent = typeof skillTree.spendSkillPoint === "function"
+        ? skillTree.spendSkillPoint({
+            skillId,
+            playerInfo,
+            classRanks,
+            getSkillRank
+        })
+        : (() => {
+            classRanks[skillId] = getSkillRank(skillId) + 1;
+            playerInfo.skillPoints -= 1;
+            return true;
+        })();
+    if (!spent) return false;
+
     passiveSkillManager.sync();
+    syncEffectState();
     recalculateStats();
     updatePlayerUI();
-    updateExpUI();
     updateSkillTreeButton();
     renderSkillTree();
     playSound("pick");
@@ -461,27 +507,14 @@ function reverseSkillPoint(skillId) {
     classRanks[skillId] = currentRank - 1;
     playerInfo.skillPoints += 1;
 
-    if (playerInfo.lvl > 1) {
-        playerInfo.lvl -= 1;
-        playerInfo.maxExp = getExpNeeded(playerInfo.lvl);
-        playerInfo.exp = Math.min(playerInfo.exp, playerInfo.maxExp);
-    }
-
     passiveSkillManager.sync();
+    syncEffectState();
     recalculateStats();
     updatePlayerUI();
-    updateExpUI();
     updateSkillTreeButton();
     renderSkillTree();
     playSound("pick");
     return true;
-}
-
-function gainSkillPoints(amount) {
-    if (amount <= 0) return;
-    playerInfo.skillPoints += amount;
-    updateSkillTreeButton();
-    renderSkillTree();
 }
 
 function openSkillTree() {
@@ -510,14 +543,6 @@ function getClassDefaultStats() {
     return getClassDefaultStatsFromModule(currentGameStats.selectedClassId, CLASSES);
 }
 
-function getClassLevelUpGrowth() {
-    return getClassLevelUpGrowthFromModule(currentGameStats.selectedClassId, CLASSES);
-}
-
-function applyClassLevelUpGrowth(levelsGained) {
-    applyClassLevelUpGrowthFromModule(playerInfo, levelsGained, getClassLevelUpGrowth());
-}
-
 const {
     openCheatPanel,
     closeCheatPanel,
@@ -544,10 +569,8 @@ const {
     setPauseState,
     recalculateStats,
     updatePlayerUI,
-    updateExpUI,
     floatText,
     getClassDefaultStats,
-    getClassLevelUpGrowth,
     createInitialCheatOverrides
 });
 
@@ -589,7 +612,6 @@ function applyMasterVolume(volume) {
     const numericVolume = Number.isFinite(Number(volume)) ? Number(volume) : 0.6;
     audioSystem.setVolume(numericVolume);
     if (bgMusic) bgMusic.volume = numericVolume;
-    if (gatekeeperVoiceAudio) gatekeeperVoiceAudio.volume = numericVolume;
     if (introCinematicVideo) introCinematicVideo.volume = getIntroVideoVolume(numericVolume);
 }
 
@@ -625,7 +647,7 @@ function setPauseState(paused) {
 }
 
 function isAnyFullscreenOverlayVisible() {
-    const overlays = [overlay, lootOverlay, pauseOverlay, tutorialOverlay, classOverlay, levelupOverlay, cheatOverlay, skillTreeOverlay, introCinematicOverlay];
+    const overlays = [overlay, lootOverlay, pauseOverlay, tutorialOverlay, classOverlay, cheatOverlay, skillTreeOverlay, introCinematicOverlay];
     return isAnyFullscreenOverlayVisibleFromUI(overlays);
 }
 
@@ -653,7 +675,7 @@ function startAvatarBlurPulses() {
 }
 
 function mountFullscreenOverlaysToBody() {
-    const overlays = [overlay, lootOverlay, tutorialOverlay, pauseOverlay, levelupOverlay, classOverlay, cheatOverlay, skillTreeOverlay, introCinematicOverlay];
+    const overlays = [overlay, lootOverlay, tutorialOverlay, pauseOverlay, classOverlay, cheatOverlay, skillTreeOverlay, introCinematicOverlay];
     mountFullscreenOverlaysToBodyFromUI(overlays);
 }
 
@@ -661,11 +683,20 @@ function waitMs(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function playIntroGateOpeningSequence() {
+function consumeCutsceneTransitionSkip() {
+    const shouldSkip = Boolean(currentGameStats.skipNextCutsceneTransition);
+    currentGameStats.skipNextCutsceneTransition = false;
+    return shouldSkip;
+}
+
+async function playIntroGateOpeningSequence(videoSrc = "") {
     if (!introCinematicOverlay || !introCinematicVideo) {
         await waitMs(300);
         return;
     }
+
+    currentGameStats.isCutsceneEventActive = true;
+    currentGameStats.skipCutsceneRequested = false;
 
     introCinematicOverlay.classList.remove("hidden");
     introCinematicOverlay.classList.remove("intro-cinematic-show-black", "intro-cinematic-fadeout", "intro-cinematic-show-video");
@@ -681,6 +712,7 @@ async function playIntroGateOpeningSequence() {
     introCinematicVideo.controls = false;
     introCinematicVideo.playbackRate = 0.85;
     introCinematicVideo.currentTime = 0;
+    if (videoSrc) introCinematicVideo.src = videoSrc;
     if (bgMusic && bgMusic.paused) {
         bgMusic.play().catch(err => console.log("Audio play failed:", err));
     }
@@ -700,6 +732,7 @@ async function playIntroGateOpeningSequence() {
         : 8500;
     const startedAt = Date.now();
     while (!videoEnded && (Date.now() - startedAt) < maxVideoMs) {
+        if (currentGameStats.skipCutsceneRequested) break;
         const hasDuration = Number.isFinite(introCinematicVideo.duration) && introCinematicVideo.duration > 0;
         if (hasDuration) {
             const remainingMs = ((introCinematicVideo.duration - introCinematicVideo.currentTime) / currentPlaybackRate) * 1000;
@@ -709,17 +742,27 @@ async function playIntroGateOpeningSequence() {
     }
 
     introCinematicOverlay.classList.add("intro-cinematic-show-black");
-    await waitMs(blackLeadMs);
+    if (currentGameStats.skipCutsceneRequested) {
+        await waitMs(40);
+    } else {
+        await waitMs(blackLeadMs);
+    }
 
     introCinematicVideo.pause();
     videoEnded = true;
     introCinematicOverlay.classList.add("intro-cinematic-fadeout");
-    await waitMs(720);
+    if (currentGameStats.skipCutsceneRequested) {
+        await waitMs(100);
+    } else {
+        await waitMs(720);
+    }
 
     introCinematicVideo.pause();
     introCinematicVideo.currentTime = 0;
     introCinematicOverlay.classList.add("hidden");
     introCinematicOverlay.classList.remove("intro-cinematic-show-video", "intro-cinematic-show-black", "intro-cinematic-fadeout");
+    currentGameStats.isCutsceneEventActive = false;
+    currentGameStats.skipCutsceneRequested = false;
 }
 
 function triggerScreenShake() {
@@ -789,6 +832,8 @@ function normalizeStatusEntry(entry) {
         id: entry.id || "",
         name: entry.name || "",
         desc: entry.desc || "",
+        image: String(entry.image || "").trim(),
+        rank: Number.isFinite(Number(entry.rank)) ? Number(entry.rank) : 1,
         note: entry.note || "",
         kind: entry.kind || "neutral",
         modifiers: entry.modifiers && typeof entry.modifiers === "object" ? entry.modifiers : {},
@@ -802,6 +847,7 @@ function normalizeSkillEntry(entry) {
         return {
             id: entry,
             name: entry,
+            desc: "",
             rank: 1,
             effectTypes: ["generic"]
         };
@@ -810,9 +856,18 @@ function normalizeSkillEntry(entry) {
     return {
         id: entry.id || "",
         name: entry.name || entry.id || "",
+        desc: entry.desc || "",
         rank: Number.isFinite(entry.rank) ? entry.rank : 1,
+        kind: String(entry.kind || entry.skillType || "").trim().toLowerCase(),
         effectTypes: normalizeEffectTypes(entry.effectTypes, entry.effectType)
     };
+}
+
+function isPassiveLikeEntry(entry) {
+    if (!entry || typeof entry !== "object") return false;
+    const kind = String(entry.kind || "").trim().toLowerCase();
+    if (!kind) return true;
+    return kind === "passive" || kind === "buff" || kind === "debuff";
 }
 
 function readEntityStatuses(entity) {
@@ -835,10 +890,22 @@ function syncEffectState() {
     const effectState = ensureEffectState();
     effectState.player.activeSkills = passiveSkillManager.getActiveSkills();
     effectState.player.activeStatuses = readEntityStatuses(playerInfo);
-    effectState.player.activePassives = [...effectState.player.activeSkills, ...effectState.player.activeStatuses];
+    effectState.player.activePassives = [
+        ...effectState.player.activeSkills.filter(isPassiveLikeEntry),
+        ...effectState.player.activeStatuses
+    ];
     effectState.enemy.activeSkills = readEnemyActiveSkills(currentGameStats.currentEnemy);
     effectState.enemy.activeStatuses = readEntityStatuses(currentGameStats.currentEnemy);
-    effectState.enemy.activePassives = [...effectState.enemy.activeSkills, ...effectState.enemy.activeStatuses];
+    effectState.enemy.activePassives = [
+        ...effectState.enemy.activeSkills.filter(isPassiveLikeEntry),
+        ...effectState.enemy.activeStatuses
+    ];
+    renderCombatSkillReadoutsFromUI({
+        playerContainer: uiSkillsReadout,
+        enemyContainer: uiEnemySkillsReadout,
+        playerSkills: effectState.player.activePassives,
+        enemySkills: effectState.enemy.activePassives
+    });
 }
 
 function getActivePlayerSkills() {
@@ -965,15 +1032,11 @@ function getLuckyStrikeChance() {
     return getLuckyStrikeChanceFromModule(getEquippedItems());
 }
 
-function updateExpUI() {
-    updateExpUIFromUI({
-        uiPlayerExpBar,
-        uiPlayerExpText,
+function updatePlayerName() {
+    updatePlayerNameUIFromUI({
         uiPlayerName,
-        playerInfo,
         currentGameStats,
-        classes: CLASSES,
-        getPlayerExpPercent
+        classes: CLASSES
     });
 }
 
@@ -982,13 +1045,12 @@ function resetPlayer() {
         playerInfo,
         currentGameStats,
         classes: CLASSES,
-        getExpNeeded,
         createInitialCheatOverrides,
         createEmptyGearSlots,
         ensureActiveClassSkillRanks,
         recalculateStats,
         updatePlayerUI,
-        updateExpUI,
+        updatePlayerName,
         renderEquipment,
         updateSkillTreeButton,
         renderSkillTree,
@@ -997,6 +1059,8 @@ function resetPlayer() {
         }
     });
     passiveSkillManager.sync();
+    syncEffectState();
+    updatePlayerName();
 }
 
 function getPlayerAvatarSrc(state = "attack") {
@@ -1017,6 +1081,13 @@ function setPlayerAvatarTemporary(state, duration) {
 }
 
 function initGame() {
+    if (overallBlackFadeOverlay) {
+        overallBlackFadeOverlay.classList.remove("hidden");
+        overallBlackFadeOverlay.classList.add("is-active");
+    }
+    if (roundTransitionOverlay) {
+        roundTransitionOverlay.classList.add("is-active");
+    }
     mountFullscreenOverlaysToBody();
     startAvatarBlurPulses();
     bindCombatStatTooltipsFromUI({
@@ -1045,35 +1116,11 @@ function initGame() {
 
 function onStartJourney() {
     tutorialOverlay.classList.add("hidden");
-    if (gatekeeperVoiceAudio) {
-        gatekeeperVoiceAudio.pause();
-        gatekeeperVoiceAudio.currentTime = 0;
-    }
     initAudio();
     setBgMusicTrack(INTRO_MUSIC_SRC, { restart: true, play: true });
     playSound("pick");
     currentGameStats.hasActiveClassSelection = false;
     showClassSelection();
-}
-
-function forceNormalVolume() {
-    currentGameStats.volIndex = 0;
-    const normalState = volumeStates[0];
-    applyMasterVolume(normalState.vol);
-    if (musicBtn) musicBtn.innerText = normalState.icon;
-}
-
-function onPlayGatekeeperVoice() {
-    forceNormalVolume();
-    if (!gatekeeperVoiceAudio) {
-        floatText("system", "Voice audio element missing.", "info");
-        return;
-    }
-    gatekeeperVoiceAudio.pause();
-    gatekeeperVoiceAudio.currentTime = 0;
-    gatekeeperVoiceAudio.play().catch(() => {
-        floatText("system", "Voice file missing at intro/voice/intro_voice.mp3", "info");
-    });
 }
 
 function showClassSelection() {
@@ -1092,7 +1139,6 @@ function showClassSelection() {
         onConfirmSelection: async () => {
             setBgMusicTrack(BATTLE_MUSIC_SRC, { restart: true, play: true });
             await startLevel(1);
-            await playIntroGateOpeningSequence();
         }
     });
 }
@@ -1117,12 +1163,10 @@ function consumeInventoryItem(index) {
         updatePlayerUI,
         resetEqReadoutBackground,
         playSound,
-        floatText
+        floatText,
+        gameEventBus,
+        GAME_EVENTS
     }, index);
-}
-
-function getPassiveShortLabel(name) {
-    return getPassiveShortLabelFromModule(name);
 }
 
 function recalculateStats() {
@@ -1189,6 +1233,7 @@ function clearEnemyDisplay() {
         uiEnemyAim,
         uiEnemyHpContainer,
         uiEnemyStatsPanel,
+        uiEnemySkillsReadout,
         eqReadout,
         defaultReadoutHtml: DEFAULT_READOUT_HTML,
         resetEqReadoutBackground
@@ -1279,7 +1324,6 @@ const combatBindings = createCombatSystem({
     playerInfo,
     gameEventBus,
     GAME_EVENTS,
-    getMaxPlayerLevel,
     lootOverlay,
     eqReadout,
     overlay,
@@ -1291,11 +1335,16 @@ const combatBindings = createCombatSystem({
     uiTurnDisplay,
     roundStartBtn,
     roundTransitionOverlay,
+    overallBlackFadeOverlay,
     createEnemyFromId,
     createEnemy,
     getRoundEnemyId,
+    getRoundType,
+    getRoundCutsceneVideo,
     getRoundBackgroundPath,
     getRoundLevelObjectWarning,
+    playRoundCutscene: videoSrc => playIntroGateOpeningSequence(videoSrc),
+    consumeCutsceneTransitionSkip,
     setBattleArenaBackground,
     setArenaLevelWarning,
     showEnemyDisplay,
@@ -1318,13 +1367,15 @@ const combatBindings = createCombatSystem({
     rollChance,
     tryDodge,
     recalculateStats,
-    updateExpUI,
-    checkLevelUp,
-    applyClassLevelUpGrowth,
-    gainSkillPoints,
     presentScavengerPotionReward,
     applyPotionDropOnKill,
     getSkillTreeRegenRate,
+    onTurnStarted: payload => {
+        passiveSkillManager.handleTurnStarted(payload);
+        syncEffectState();
+        updateEnemyUI();
+        updatePlayerUI();
+    },
     getSkillRank,
     canTriggerTurnSkill,
     getEnemyTurnDots,
@@ -1411,14 +1462,10 @@ function renderEquipment() {
         gearSlotOrder: GEAR_SLOT_ORDER,
         gearSlotLabels: GEAR_SLOT_LABELS,
         consumableSlotCount: CONSUMABLE_SLOT_COUNT,
-        uiSkillsReadout,
-        getPassiveShortLabel,
-        playSound,
         consumeInventoryItem,
         showInfoTooltipFn: showInfoTooltip,
         hideInfoTooltipFn: hideInfoTooltip,
-        showItemInfoFn: showItemInfo,
-        showPassiveInfoFn: showPassiveInfo
+        showItemInfoFn: showItemInfo
     });
 }
 
@@ -1448,13 +1495,6 @@ function showEnemyInfo() {
     return showEnemyInfoFromUI(currentGameStats.currentEnemy);
 }
 
-function showPassiveInfo(passive) {
-    showPassiveInfoFromUI({
-        passive,
-        eqReadout
-    });
-}
-
 function showItemInfo(item, isConsumable = false, gearSlotKey = "") {
     let consumableEffectNotes = [];
     if (isConsumable && item && typeof item.resolveConsumableEffects === "function") {
@@ -1478,12 +1518,6 @@ function showItemInfo(item, isConsumable = false, gearSlotKey = "") {
 }
 
 bindUIControls({
-    levelupCloseBtn,
-    onLevelupClose: () => {
-        levelupOverlay.classList.add("hidden");
-        currentGameStats.isPaused = false;
-        advanceToNextRound();
-    },
     modalBtn,
     onModalConfirm: () => {
         overlay.classList.add("hidden");
@@ -1538,9 +1572,14 @@ bindUIControls({
     onOpenEditorPage: openEditorPage
 });
 
-if (playVoiceBtn) {
-    playVoiceBtn.onclick = onPlayGatekeeperVoice;
-}
+window.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    if (!currentGameStats.isCutsceneEventActive) return;
+    currentGameStats.skipCutsceneRequested = true;
+    currentGameStats.skipNextCutsceneTransition = true;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+}, true);
 
 window.addEventListener("DOMContentLoaded", initGame);
 

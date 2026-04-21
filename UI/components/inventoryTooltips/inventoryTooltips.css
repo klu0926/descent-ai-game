@@ -1,0 +1,26 @@
+.info-tooltip {
+    position: fixed;
+    z-index: 2800;
+    width: 320px;
+    max-width: 88vw;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.88);
+    border: 1px solid #2f2314;
+    border-radius: 4px;
+    box-shadow: var(--inner-panel-shadow);
+    padding: 12px;
+}
+
+.info-tooltip.info-tooltip-compact {
+    width: max-content;
+    max-width: 88vw;
+    padding: 8px 10px;
+}
+
+.slot-item-name.rarity-common,
+.slot-item-name.rarity-uncommon,
+.slot-item-name.rarity-rare,
+.slot-item-name.rarity-epic,
+.slot-item-name.rarity-legendary {
+    font-weight: 700;
+}

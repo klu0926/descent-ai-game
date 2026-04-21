@@ -9,6 +9,20 @@ function getSkillInitials(skillName) {
     return `${words[0][0]}${words[1][0]}`.toUpperCase();
 }
 
+function escapeHtml(value) {
+    return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+function highlightValueToken(text) {
+    const escaped = escapeHtml(text);
+    const withTokenHighlight = escaped.replace(/\[(value|chance)\]/gi, '<span class="skill-token-value">[$1]</span>');
+    return withTokenHighlight.replace(/(^|[^a-zA-Z0-9_])([+-]?\d+(?:\.\d+)?%?)(?=$|[^a-zA-Z0-9_])/g, "$1<span class=\"skill-token-value\">$2</span>");
+}
+
 function getSkillLockReason({
     node,
     rank,
@@ -38,7 +52,6 @@ export function renderSkillTree({
     skillTreeStatusElement,
     skillTreePortraitElement,
     playerInfo,
-    maxPlayerLevel,
     skillTreeSections,
     skillTreeNodes,
     getSkillRank,
@@ -50,7 +63,6 @@ export function renderSkillTree({
 }) {
     if (!skillTreeSectionsElement || !skillTreeStatusElement) return;
     skillTreeStatusElement.innerHTML = `
-        <span class="skill-tree-metric">Level ${playerInfo.lvl}/${maxPlayerLevel}</span>
         <span class="skill-tree-metric">Total spent: ${getTotalSkillSpent()}</span>
         <span class="skill-tree-metric skill-tree-points-value">Points: ${playerInfo.skillPoints}</span>
     `;
@@ -85,7 +97,7 @@ export function renderSkillTree({
                         data-tooltip-side="${tooltipSide}">
                         <span class="skill-node-icon${iconImage ? "" : " no-image"}" ${iconImage ? `style="background-image:url('${iconImage}')"` : ""}>
                             ${iconImage ? "" : `<span class="skill-node-initial">${getSkillInitials(node.name)}</span>`}
-                            <span class="skill-node-rank-badge">${rank}/${node.maxRank}</span>
+                            ${rank > 1 ? `<span class="skill-node-rank-badge">${rank}</span>` : ""}
                         </span>
                     </button>
                 `;
@@ -135,18 +147,36 @@ export function showSkillTooltip({
     const levelData = node
         ? (Array.isArray(node.levelData) ? node.levelData : (Array.isArray(node.levelDesc) ? node.levelDesc : []))
         : [];
+    const formattedCurrentDesc = node && typeof node.formatDescription === "function"
+        ? String(node.formatDescription(Math.max(1, rank)) || "")
+        : "";
     if (levelData.length > 0) {
         const descIndex = Math.max(0, Math.min(rank - 1, levelData.length - 1));
-        if (rank > 0) desc = levelData[descIndex];
+        if (rank > 0) {
+            const rawCurrent = String(levelData[descIndex] || "");
+            desc = node && typeof node.formatTextWithTokens === "function"
+                ? node.formatTextWithTokens(rawCurrent, rank)
+                : (node && typeof node.formatTextWithValue === "function"
+                    ? node.formatTextWithValue(rawCurrent, rank)
+                    : rawCurrent);
+        }
         else desc = "";
         if (rank < maxRank) {
             const nextIndex = Math.min(rank, levelData.length - 1);
             const nextLabel = rank === 0 ? "Level 1:" : "Next level:";
+            const rawNext = String(levelData[nextIndex] || "");
+            const nextDesc = node && typeof node.formatTextWithTokens === "function"
+                ? node.formatTextWithTokens(rawNext, rank + 1)
+                : (node && typeof node.formatTextWithValue === "function"
+                    ? node.formatTextWithValue(rawNext, rank + 1)
+                    : rawNext);
             extraHtml = `
                 <div class="skill-tooltip-next-label">${nextLabel}</div>
-                <div class="skill-tooltip-next-desc">${levelData[nextIndex]}</div>
+                <div class="skill-tooltip-next-desc">${highlightValueToken(nextDesc)}</div>
             `;
         }
+    } else if (formattedCurrentDesc) {
+        desc = formattedCurrentDesc;
     }
 
     const lockText = node && !canSpendSkillPoint(node)
@@ -158,7 +188,7 @@ export function showSkillTooltip({
         <div class="skill-tooltip-title">${name}</div>
         ${effectTypesHtml}
         <div class="skill-tooltip-rank">${rank}/${maxRank}</div>
-        <div class="skill-tooltip-desc">${desc}</div>
+        <div class="skill-tooltip-desc">${highlightValueToken(desc)}</div>
         ${extraHtml}
         ${lockText ? `<div class="skill-tooltip-lock ${hasTreeLock ? "is-tree-lock" : ""}">${lockText}</div>` : ""}
     `;

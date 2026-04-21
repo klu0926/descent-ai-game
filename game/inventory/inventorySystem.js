@@ -48,5 +48,40 @@ export function consumeInventoryItem(ctx, index) {
         ctx.floatText("player", "Improvised boost", "info");
     }
 
+    if (
+        ctx &&
+        ctx.gameEventBus &&
+        typeof ctx.gameEventBus.emit === "function" &&
+        ctx.GAME_EVENTS &&
+        ctx.GAME_EVENTS.HEAL_ITEM_USED
+    ) {
+        ctx.gameEventBus.emit(ctx.GAME_EVENTS.HEAL_ITEM_USED, {
+            source: "healing_potion",
+            itemId: String(item && item.id || ""),
+            itemName: String(item && item.name || ""),
+            healAmount: actualHeal,
+            healRequested: healAmount
+        });
+    }
+
+    if (ctx && ctx.gameEventBus && typeof ctx.gameEventBus.emit === "function") {
+        const customUseEvents = Array.isArray(item && item.itemUseEventTriggers)
+            ? item.itemUseEventTriggers
+            : [];
+        customUseEvents.forEach(eventName => {
+            const safeEventName = String(eventName || "").trim();
+            if (!safeEventName) return;
+            ctx.gameEventBus.emit(safeEventName, {
+                source: "item_use",
+                itemId: String(item && item.id || ""),
+                itemName: String(item && item.name || ""),
+                rewardType: String(item && item.rewardType || ""),
+                consumableType: String(item && item.consumableType || ""),
+                healAmount: actualHeal,
+                healRequested: healAmount
+            });
+        });
+    }
+
     return true;
 }

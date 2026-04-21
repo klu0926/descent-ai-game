@@ -9,7 +9,10 @@ export class Character {
         crit = 0,
         dodge = 0,
         aim = 0,
-        desc = ""
+        desc = "",
+        activeSkills = [],
+        passiveSkills = [],
+        activeStatuses = []
     } = {}) {
         this.name = name;
         this.type = type;
@@ -21,6 +24,51 @@ export class Character {
         this.dodge = dodge;
         this.aim = aim;
         this.desc = desc;
+
+        this.activeSkills = Array.isArray(activeSkills) ? [...activeSkills] : [];
+        this.passiveSkills = Array.isArray(passiveSkills) ? [...passiveSkills] : [];
+        this.activeStatuses = Array.isArray(activeStatuses) ? [...activeStatuses] : [];
+
+        // Compatibility aliases with existing runtime readers.
+        this.skills = this.activeSkills;
+        this.statuses = this.activeStatuses;
+        this.statusEffects = this.activeStatuses;
+        this.passives = this.passiveSkills;
+    }
+
+    setActiveSkills(skills = []) {
+        this.activeSkills = Array.isArray(skills) ? [...skills] : [];
+        this.skills = this.activeSkills;
+    }
+
+    setPassiveSkills(passives = []) {
+        this.passiveSkills = Array.isArray(passives) ? [...passives] : [];
+        this.passives = this.passiveSkills;
+    }
+
+    setActiveStatuses(statuses = []) {
+        this.activeStatuses = Array.isArray(statuses) ? [...statuses] : [];
+        this.statuses = this.activeStatuses;
+        this.statusEffects = this.activeStatuses;
+    }
+
+    addActiveSkill(skill) {
+        if (!skill) return;
+        this.activeSkills.push(skill);
+        this.skills = this.activeSkills;
+    }
+
+    addPassiveSkill(passive) {
+        if (!passive) return;
+        this.passiveSkills.push(passive);
+        this.passives = this.passiveSkills;
+    }
+
+    addActiveStatus(status) {
+        if (!status) return;
+        this.activeStatuses.push(status);
+        this.statuses = this.activeStatuses;
+        this.statusEffects = this.activeStatuses;
     }
 }
 
@@ -28,21 +76,20 @@ export class EnemyCharacter extends Character {
     constructor({
         img = "",
         size = "m",
-        exp = 0,
+        essence = 1,
+        canAttack = true,
         ...rest
     } = {}) {
         super(rest);
         this.img = img;
         this.size = size;
-        this.exp = exp;
+        this.essence = Math.max(0, Math.floor(Number(essence) || 0));
+        this.canAttack = Boolean(canAttack);
     }
 }
 
 export class PlayerCharacter extends Character {
     constructor({
-        lvl = 1,
-        exp = 0,
-        maxExp = 0,
         baseHp = 100,
         baseAtk = 10,
         baseDef = 5,
@@ -53,7 +100,11 @@ export class PlayerCharacter extends Character {
         consumables = [],
         gearSlots = {},
         skillPoints = 0,
-        skillTreeRanks = {}
+        skillTreeRanks = {},
+        essence = 0,
+        activeSkills = [],
+        passiveSkills = [],
+        activeStatuses = []
     } = {}) {
         super({
             name: "Adventurer",
@@ -64,12 +115,12 @@ export class PlayerCharacter extends Character {
             def: baseDef,
             crit: baseCrit,
             dodge: baseDodge,
-            aim: baseAim
+            aim: baseAim,
+            activeSkills,
+            passiveSkills,
+            activeStatuses
         });
 
-        this.lvl = lvl;
-        this.exp = exp;
-        this.maxExp = maxExp;
         this.baseHp = baseHp;
         this.baseAtk = baseAtk;
         this.baseDef = baseDef;
@@ -81,5 +132,6 @@ export class PlayerCharacter extends Character {
         this.gearSlots = gearSlots;
         this.skillPoints = skillPoints;
         this.skillTreeRanks = skillTreeRanks;
+        this.essence = Math.max(0, Math.floor(Number(essence) || 0));
     }
 }

@@ -11,12 +11,15 @@ export class SmallPotion extends ConsumableItem {
             name: "Small Potion",
             price: 100,
             healAmount: 0,
-            healPercent: 0.1,
+            healPercent: 0.25,
             effectMode: "once",
             effectTurns: 1,
             effectRounds: 1,
             stats: {},
             passives: [],
+            itemUseEventTriggers: [
+                "combat:heal_item_used"
+            ],
             storyDesc: "A grimy vial swirls with metallic dark fluid, reeking of ash and rot. Cursed healing tastes wicked,",
             functionDesc: "Restores 25% HP."
         });

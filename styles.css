@@ -1,3 +1,5 @@
+@import "./UI/components/components.css";
+
 /* BG3 / Dark Fantasy RPG Theme */
 :root {
     --bg-dark: #0f0a07;
@@ -49,6 +51,20 @@ body {
     padding: 15px;
     position: relative;
     overflow: hidden;
+}
+
+.overall-black-fade {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2500;
+    transition: opacity 420ms ease;
+}
+
+.overall-black-fade.is-active {
+    opacity: 1;
 }
 
 h1,
@@ -246,6 +262,11 @@ h3 {
 
 .arena-hud .stats-panel,
 .arena-hud .stats-panel * {
+    pointer-events: auto;
+}
+
+.arena-hud .skills-readout,
+.arena-hud .skills-readout * {
     pointer-events: auto;
 }
 
@@ -621,66 +642,6 @@ h3 {
     margin-bottom: 0;
 }
 
-.exp-shake-wrap-spaced {
-    margin-bottom: 24px;
-}
-
-.player-exp-container {
-    width: 100%;
-    background: #1a1a1a;
-    border: 2px solid var(--border-gold-dim);
-    height: 20px;
-    border-radius: 4px;
-    position: relative;
-    overflow: hidden;
-    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
-}
-
-.player-exp-bar {
-    width: 0%;
-    height: 100%;
-    background: linear-gradient(to right, #8c6a1d 0%, #d4a731 100%);
-    box-shadow: inset 0 0 8px rgba(212, 167, 49, 0.4), 0 0 6px rgba(212, 167, 49, 0.5);
-    transition: width 0.3s ease-in-out;
-    position: absolute;
-    left: 0;
-    top: 0;
-    z-index: 1;
-}
-
-.exp-grid-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: grid;
-    grid-template-columns: repeat(10, 1fr);
-    pointer-events: none;
-    z-index: 2;
-}
-
-.exp-grid-cell-divider {
-    border-right: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.player-exp-text {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: var(--border-gold);
-    font-size: 1.05rem;
-    font-weight: 700;
-    text-shadow: 1px 1px 3px #000;
-    font-family: var(--font-text);
-    z-index: 3;
-}
-
 .inventory-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
@@ -803,6 +764,12 @@ h3 {
     min-height: 70px;
 }
 
+.gear-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+
 .gear-grid .grid-item {
     width: 70px;
     height: 70px;
@@ -817,6 +784,12 @@ h3 {
     min-height: 70px;
 }
 
+.consumable-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+
 .consumable-grid .grid-item {
     width: 70px;
     height: 70px;
@@ -824,29 +797,46 @@ h3 {
     font-size: 1.1rem;
 }
 
+.essence-cell {
+    width: 70px;
+    height: 70px;
+    border: 1px solid #3a2b1a;
+    background-image:
+        linear-gradient(135deg, rgba(6, 6, 6, 0.62), rgba(6, 6, 6, 0.75)),
+        url("resources/images/UI/gear_ui/essence.png");
+    background-size: cover, 100% 100%;
+    background-position: center, center;
+    background-repeat: no-repeat, no-repeat;
+    box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+    user-select: none;
+}
+
+.essence-cell-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    color: #d7c7ae;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    line-height: 1.1;
+}
+
+.essence-cell-value {
+    margin-top: 4px;
+    font-size: 1.2rem;
+    color: #f3dbb0;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    line-height: 1;
+}
+
 .consumable-grid .grid-item.empty {
     border-color: #3a2b1a;
     background: linear-gradient(135deg, rgba(38, 28, 18, 0.42), rgba(18, 12, 8, 0.72));
     box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.5);
-}
-
-.info-tooltip {
-    position: fixed;
-    z-index: 2800;
-    width: 320px;
-    max-width: 88vw;
-    pointer-events: none;
-    background: rgba(0, 0, 0, 0.88);
-    border: 1px solid #2f2314;
-    border-radius: 4px;
-    box-shadow: var(--inner-panel-shadow);
-    padding: 12px;
-}
-
-.info-tooltip.info-tooltip-compact {
-    width: max-content;
-    max-width: 88vw;
-    padding: 8px 10px;
 }
 
 .stat-tip-text {
@@ -904,14 +894,6 @@ h3 {
     text-shadow: 0 0 8px rgba(234, 179, 8, 0.6);
 }
 
-.slot-item-name.rarity-common,
-.slot-item-name.rarity-uncommon,
-.slot-item-name.rarity-rare,
-.slot-item-name.rarity-epic,
-.slot-item-name.rarity-legendary {
-    font-weight: 700;
-}
-
 .fct-container {
     position: absolute;
     bottom: calc(50% + 125px);
@@ -935,46 +917,76 @@ h3 {
     margin-top: 10px;
 }
 
-.passive-icon {
+.skills-readout-enemy {
+    justify-content: flex-end;
+}
+
+.combat-skill-chip {
     position: relative;
-    width: 36px;
-    height: 36px;
-    border-radius: 999px;
-    border: 1px solid rgba(179, 139, 77, 0.7);
-    background: radial-gradient(circle at 35% 30%, rgba(243, 212, 158, 0.28), rgba(48, 26, 10, 0.95));
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    border: 1px solid rgba(179, 139, 77, 0.72);
+    background: linear-gradient(180deg, rgba(66, 44, 22, 0.92) 0%, rgba(22, 13, 7, 0.92) 100%);
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
     color: var(--text-highlight);
     font-family: var(--font-heading);
-    font-size: 0.82rem;
+    font-size: 0.72rem;
     font-weight: 700;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.65), inset 0 0 10px rgba(255, 220, 150, 0.1);
-    text-shadow: 0 0 5px rgba(0, 0, 0, 0.9);
+    overflow: hidden;
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.45), 0 0 5px rgba(0, 0, 0, 0.35);
 }
 
-.passive-icon:hover,
-.passive-icon.active {
-    border-color: var(--text-highlight);
-    box-shadow: 0 0 14px rgba(179, 139, 77, 0.45), inset 0 0 12px rgba(255, 220, 150, 0.16);
+.combat-skill-chip.has-image {
+    color: transparent;
 }
 
-.passive-count {
+.combat-skill-chip.is-debuff {
+    border-color: rgba(220, 52, 52, 0.95);
+}
+
+.combat-skill-chip.is-passive {
+    border-color: rgba(232, 193, 66, 0.95);
+}
+
+.combat-skill-chip.is-buff {
+    border-color: rgba(64, 132, 255, 0.95);
+}
+
+.combat-skill-rank {
     position: absolute;
-    right: -3px;
-    bottom: -3px;
-    min-width: 16px;
-    height: 16px;
-    padding: 0 3px;
-    border-radius: 999px;
-    background: #eab308;
-    color: #1a120e;
-    font-size: 0.65rem;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    right: -2px;
+    bottom: -2px;
+    min-width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(24, 24, 24, 0.95);
+    background: rgba(0, 0, 0, 0.86);
+    color: #5bd66f;
+    font-size: 0.62rem;
+    line-height: 12px;
+    text-align: center;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+}
+
+.combat-skill-tooltip {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 13000;
+    max-width: 260px;
+    padding: 8px 10px;
+    border: 1px solid rgba(179, 139, 77, 0.85);
+    border-radius: 8px;
+    background: rgba(12, 8, 6, 0.95);
+    color: var(--text-main);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
 }
 
 .floating-text {
@@ -1098,33 +1110,6 @@ h3 {
     animation: shake 0.15s ease-in-out both;
 }
 
-@keyframes expShake {
-    0% {
-        transform: translate3d(0.5px, 0.5px, 0);
-    }
-
-    25% {
-        transform: translate3d(-0.7px, -0.6px, 0);
-    }
-
-    50% {
-        transform: translate3d(0.6px, -0.4px, 0);
-    }
-
-    75% {
-        transform: translate3d(-0.5px, 0.5px, 0);
-    }
-
-    100% {
-        transform: translate3d(0, 0, 0);
-    }
-}
-
-.anim-exp-shake {
-    will-change: transform;
-    animation: expShake 0.1s ease-in-out both;
-}
-
 @keyframes critFlash {
     0% {
         box-shadow: none;
@@ -1148,7 +1133,6 @@ h3 {
 #loot-overlay,
 #tutorial-overlay,
 #pause-overlay,
-#levelup-overlay,
 #class-overlay,
 #cheat-overlay,
 #skill-tree-overlay {
@@ -1276,6 +1260,20 @@ h3 {
     z-index: 5;
 }
 
+.cutscene-skip-hint {
+    position: absolute;
+    right: 16px;
+    bottom: 14px;
+    z-index: 6;
+    font-family: var(--font-text);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    color: rgba(245, 236, 217, 0.55);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+    user-select: none;
+    pointer-events: none;
+}
+
 #tutorial-overlay {
     padding-bottom: 0;
     background: #000;
@@ -1291,10 +1289,6 @@ h3 {
     background: rgba(0, 0, 0, 0.58);
     backdrop-filter: blur(3px);
     z-index: 130;
-}
-
-.overlay-levelup {
-    z-index: 2500 !important;
 }
 
 .overlay-skilltree {
@@ -2836,6 +2830,11 @@ h3 {
     font-size: 0.92rem;
     line-height: 1.35;
     white-space: pre-line;
+}
+
+.skill-token-value {
+    color: #eab308;
+    font-weight: 700;
 }
 
 .skill-tooltip-rank {

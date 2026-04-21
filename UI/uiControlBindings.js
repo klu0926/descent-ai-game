@@ -1,6 +1,4 @@
 export function bindUIControls({
-    levelupCloseBtn,
-    onLevelupClose,
     modalBtn,
     onModalConfirm,
     musicBtn,
@@ -44,10 +42,6 @@ export function bindUIControls({
     editorPageBtn,
     onOpenEditorPage
 }) {
-    if (levelupCloseBtn) {
-        levelupCloseBtn.onclick = onLevelupClose;
-    }
-
     if (modalBtn) {
         modalBtn.onclick = onModalConfirm;
     }

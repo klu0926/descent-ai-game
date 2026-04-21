@@ -5,6 +5,7 @@ import { CHIEF_ENEMY } from "./chief/chief_data.js";
 import { CULTIST_ENEMY } from "./cultist/cultist_data.js";
 import { DARKMAGE_ENEMY } from "./dark_mage/dark_mage_data.js";
 import { DOCTOR_ENEMY } from "./doctor/doctor_data.js";
+import { DUMMY_ENEMY } from "./dummy/dummy_data.js";
 import { GOLEM_ENEMY } from "./golem/golem_data.js";
 import { GUARD_ENEMY } from "./guard/guard_data.js";
 import { KNIGHT_ENEMY } from "./knight/knight_data.js";
@@ -21,6 +22,7 @@ export const ENEMY_TYPES = [
     CULTIST_ENEMY,
     DARKMAGE_ENEMY,
     DOCTOR_ENEMY,
+    DUMMY_ENEMY,
     GOLEM_ENEMY,
     GUARD_ENEMY,
     KNIGHT_ENEMY,
