@@ -24,12 +24,14 @@
             <a class="top-nav-link is-active" href="/level.html">Level</a>
             <a class="top-nav-link" href="/backgrounds.html">Background</a>
             <a class="top-nav-link" href="/items.html">Items</a>
+            <a class="top-nav-link" href="/events.html">Events</a>
+            <a class="top-nav-link" href="/skills.html">Skills</a>
         </nav>
     </div>
 
     <div class="panel">
         <h1>Level Editor</h1>
-        <div class="muted">Manage level rounds, background art, and round flow data.</div>
+        <div class="muted">Manage level scenes, background art, and scene flow data.</div>
         <div id="status" class="muted">Loading levels...</div>
     </div>
 
@@ -45,7 +47,7 @@
             >Close</button>
         </div>
         <div id="level-panel-body">
-            <div class="muted">Assign round backgrounds from your global background library and update <code>level/level.js</code>.</div>
+            <div class="muted">Assign scene backgrounds from your global background library and update <code>content/levels/level.js</code>.</div>
             <div id="level-panel-list" class="enemy-panel-list"></div>
         </div>
     </div>
@@ -55,7 +57,7 @@
 <div id="bg-select-modal" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-card bg-select-modal-card" role="dialog" aria-modal="true" aria-labelledby="bg-select-title">
         <h2 id="bg-select-title" class="modal-title">Select Background</h2>
-        <p class="modal-message">Click a background image to assign it to this round.</p>
+        <p class="modal-message">Click a background image to assign it to this scene.</p>
         <div id="bg-select-list" class="bg-select-list"></div>
         <div class="modal-actions">
             <button id="bg-select-close-btn" type="button" class="btn-secondary">Close</button>
@@ -86,8 +88,8 @@
 
 <div id="delete-confirm-modal" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
-        <h2 id="delete-confirm-title" class="modal-title">Remove Round</h2>
-        <p id="delete-confirm-message" class="modal-message">Remove this round from the level?</p>
+        <h2 id="delete-confirm-title" class="modal-title">Remove Scene</h2>
+        <p id="delete-confirm-message" class="modal-message">Remove this scene from the level?</p>
         <div class="modal-actions">
             <button id="delete-cancel-btn" type="button" class="btn-secondary">Cancel</button>
             <button id="delete-confirm-btn" type="button" class="btn-danger">Remove</button>
@@ -101,7 +103,7 @@
         <p class="modal-message">Set a filename for this new background image.</p>
         <div class="add-desc-row">
             <span class="add-col-label">background_image name</span>
-            <input id="bg-import-name-input" type="text" placeholder="level_1_round_1">
+            <input id="bg-import-name-input" type="text" placeholder="level_1_scene_1">
         </div>
         <div class="modal-actions">
             <button id="bg-import-cancel-btn" type="button" class="btn-secondary">Cancel</button>
@@ -112,3 +114,6 @@
 
 </body>
 </html>
+
+
+

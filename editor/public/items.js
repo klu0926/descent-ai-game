@@ -122,6 +122,13 @@ function formatConsumableEffectText(entry) {
     return parts.join(" | ");
 }
 
+function formatTriggerEventsText(entry) {
+    const triggers = Array.isArray(entry && entry.itemUseEventTriggers) ? entry.itemUseEventTriggers : [];
+    const clean = triggers.map(value => String(value || "").trim()).filter(Boolean);
+    if (!clean.length) return "";
+    return clean.join(", ");
+}
+
 function buildItemHoverCardHtml(entry) {
     if (!entry || typeof entry !== "object") return "";
     const itemName = escapeHtml(entry.name || "");
@@ -129,6 +136,7 @@ function buildItemHoverCardHtml(entry) {
     const statsText = escapeHtml(formatItemStats(entry.stats));
     const descText = escapeHtml(entry.storyDesc || entry.desc || "");
     const consumableEffectText = escapeHtml(formatConsumableEffectText(entry));
+    const triggerEventsText = escapeHtml(formatTriggerEventsText(entry));
     const isConsumable = String(entry.rewardType || "").toLowerCase() === "consumable"
         || String(entry.itemType || "").toLowerCase() === "consumable"
         || String(entry.type || "").toLowerCase() === "consumable";
@@ -152,6 +160,7 @@ function buildItemHoverCardHtml(entry) {
         ${descText ? `<div class="slot-item-desc" style="color: #ffffff; font-size: 1rem; line-height: 1.4;">${descText}</div>` : ""}
         ${statsText ? `<div class="slot-item-stats" style="font-size: 0.9rem; color: var(--text-green, #86efac); margin-top: 6px; margin-bottom: 8px;">${statsText}</div>` : ""}
         ${consumableEffectText ? `<div class="slot-item-stats" style="font-size: 0.9rem; color: var(--text-green, #86efac); margin-top: 6px;">${consumableEffectText}</div>` : ""}
+        ${triggerEventsText ? `<div class="slot-item-stats" style="font-size: 0.9rem; color: #93c5fd; margin-top: 6px;">Trigger Events: ${triggerEventsText}</div>` : ""}
         ${useHint}
         ${passivesHtml ? `<div style="line-height: 1.4;">${passivesHtml}</div>` : ""}
     `;
@@ -607,6 +616,18 @@ function renderCards() {
 
         const actions = document.createElement("div");
         actions.className = "enemy-card-actions";
+        const cardStatus = document.createElement("div");
+        cardStatus.className = "add-form-warning hidden items-card-status";
+
+        const clearCardStatus = () => {
+            cardStatus.textContent = "";
+            cardStatus.classList.add("hidden");
+        };
+
+        const setCardWarning = message => {
+            cardStatus.textContent = String(message || "");
+            cardStatus.classList.toggle("hidden", !cardStatus.textContent);
+        };
 
         const saveBtn = document.createElement("button");
         saveBtn.type = "button";
@@ -642,7 +663,7 @@ function renderCards() {
             input.value = String(value || "");
             input.addEventListener("input", () => {
                 setCardDirtyValue(key, prop, input.value, String(value || ""));
-                input.classList.add("dirty");
+                clearCardStatus();
                 updateActionState();
             });
             wrap.appendChild(labelEl);
@@ -692,8 +713,8 @@ function renderCards() {
             } else {
                 setCardDirtyValue(key, "itemType", subtypeSelect.value, String(entry.itemType || "consumable"));
             }
-            subtypeSelect.classList.add("dirty");
             if (typeof syncCardConsumableVisibility === "function") syncCardConsumableVisibility();
+            clearCardStatus();
             updateActionState();
         });
         subtypeWrap.appendChild(subtypeLabel);
@@ -709,7 +730,7 @@ function renderCards() {
         populateTempIconSelect(iconSelect, entry.temp_icon || BOX_ICON);
         iconSelect.addEventListener("change", () => {
             setCardDirtyValue(key, "temp_icon", iconSelect.value, String(entry.temp_icon || BOX_ICON));
-            iconSelect.classList.add("dirty");
+            clearCardStatus();
             updateActionState();
         });
         iconWrap.appendChild(iconLabel);
@@ -731,7 +752,7 @@ function renderCards() {
             input.addEventListener("input", () => {
                 const nextPrice = parsePrice(input.value, originalPrice);
                 setCardDirtyValue(key, "price", nextPrice, originalPrice);
-                input.classList.add("dirty");
+                clearCardStatus();
                 updateActionState();
             });
             wrap.appendChild(labelEl);
@@ -811,10 +832,11 @@ function renderCards() {
             try {
                 await uploadImage(entry.kind, entry.id, file);
                 state.pendingImages.delete(key);
+                clearCardStatus();
             } catch (error) {
                 // Keep a fallback pending image so Save can retry upload manually.
                 state.pendingImages.set(key, file);
-                status(error.message, "err");
+                setCardWarning(error.message);
             } finally {
                 picker.disabled = false;
                 fileInput.value = "";
@@ -840,7 +862,7 @@ function renderCards() {
         storyInput.value = String(entry.storyDesc || "");
         storyInput.addEventListener("input", () => {
             setCardDirtyValue(key, "storyDesc", storyInput.value, String(entry.storyDesc || ""));
-            storyInput.classList.add("dirty");
+            clearCardStatus();
             updateActionState();
         });
         storyWrap.appendChild(storyLabel);
@@ -856,7 +878,7 @@ function renderCards() {
         functionInput.value = String(entry.functionDesc || "");
         functionInput.addEventListener("input", () => {
             setCardDirtyValue(key, "functionDesc", functionInput.value, String(entry.functionDesc || ""));
-            functionInput.classList.add("dirty");
+            clearCardStatus();
             updateActionState();
         });
         functionWrap.appendChild(functionLabel);
@@ -864,6 +886,12 @@ function renderCards() {
         rowTwo.appendChild(functionWrap);
 
         card.appendChild(rowTwo);
+
+        const triggerEvents = formatTriggerEventsText(entry);
+        const triggerInfo = document.createElement("div");
+        triggerInfo.className = "muted mt8";
+        triggerInfo.textContent = `item use events: ${triggerEvents || "none"}`;
+        card.appendChild(triggerInfo);
 
         const statsRow = document.createElement("div");
         statsRow.className = "items-stats-row";
@@ -886,7 +914,7 @@ function renderCards() {
                     nextStats[keyName] = parseIntLoose(statInputs[keyName].value, 0);
                 });
                 setCardDirtyValue(key, "stats", nextStats, originalStats);
-                input.classList.add("dirty");
+                clearCardStatus();
                 updateActionState();
             });
             wrap.appendChild(labelEl);
@@ -921,7 +949,7 @@ function renderCards() {
         const healAmountField = buildNumberEffectField("healing amount", originalHealAmount, () => {
             const nextValue = parseIntLoose(healAmountField.input.value, originalHealAmount, 0);
             setCardDirtyValue(key, "healAmount", nextValue, originalHealAmount);
-            healAmountField.input.classList.add("dirty");
+            clearCardStatus();
             updateActionState();
         });
         healAmountField.input.min = "0";
@@ -933,7 +961,7 @@ function renderCards() {
             const nextStoredValue = nextUiValue / 100;
             const originalStoredValue = originalHealPercentUi / 100;
             setCardDirtyValue(key, "healPercent", nextStoredValue, originalStoredValue);
-            healPercentField.input.classList.add("dirty");
+            clearCardStatus();
             updateActionState();
         });
         healPercentField.input.min = "0";
@@ -961,7 +989,7 @@ function renderCards() {
         const turnField = buildNumberEffectField("turn count", originalEffectTurns, () => {
             const nextValue = parseIntLoose(turnField.input.value, originalEffectTurns, 1);
             setCardDirtyValue(key, "effectTurns", nextValue, originalEffectTurns);
-            turnField.input.classList.add("dirty");
+            clearCardStatus();
             updateActionState();
         });
         turnField.input.min = "1";
@@ -971,7 +999,7 @@ function renderCards() {
         const roundField = buildNumberEffectField("round count", originalEffectRounds, () => {
             const nextValue = parseIntLoose(roundField.input.value, originalEffectRounds, 1);
             setCardDirtyValue(key, "effectRounds", nextValue, originalEffectRounds);
-            roundField.input.classList.add("dirty");
+            clearCardStatus();
             updateActionState();
         });
         roundField.input.min = "1";
@@ -994,8 +1022,8 @@ function renderCards() {
 
         modeSelect.addEventListener("change", () => {
             setCardDirtyValue(key, "effectMode", modeSelect.value, originalEffectMode);
-            modeSelect.classList.add("dirty");
             syncCardConsumableVisibility();
+            clearCardStatus();
             updateActionState();
         });
 
@@ -1004,6 +1032,7 @@ function renderCards() {
 
         saveBtn.addEventListener("click", async () => {
             try {
+                clearCardStatus();
                 const dirty = { ...(state.dirty.get(key) || {}) };
                 let nextId = entry.id;
                 if (Object.keys(dirty).length > 0) {
@@ -1022,15 +1051,18 @@ function renderCards() {
 
                 state.dirty.delete(key);
                 state.pendingImages.delete(key);
+                updateActionState();
+                clearCardStatus();
                 await loadData();
             } catch (error) {
-                status(error.message, "err");
+                setCardWarning(error.message);
             }
         });
 
         resetBtn.addEventListener("click", () => {
             state.dirty.delete(key);
             state.pendingImages.delete(key);
+            clearCardStatus();
             renderCards();
         });
         deleteBtn.addEventListener("click", () => {
@@ -1045,6 +1077,7 @@ function renderCards() {
         actions.appendChild(saveBtn);
         actions.appendChild(resetBtn);
         actions.appendChild(deleteBtn);
+        actions.appendChild(cardStatus);
         card.appendChild(actions);
         updateActionState();
         el.panelList.appendChild(card);

@@ -2,7 +2,8 @@ const state = {
     playerClass: null,
     dirty: {},
     activeImageJobs: 0,
-    availableItems: []
+    availableItems: [],
+    availableSkills: []
 };
 
 const el = {
@@ -15,6 +16,17 @@ const el = {
     saveBtn: null,
     resetBtn: null
 };
+
+function toPlainText(value) {
+    const raw = String(value ?? "");
+    if (!raw) return "";
+    const decode = document.createElement("div");
+    decode.innerHTML = raw;
+    const decoded = decode.textContent || "";
+    const strip = document.createElement("div");
+    strip.innerHTML = decoded;
+    return String(strip.textContent || "").trim();
+}
 
 function setStatus(message, kind = "muted") {
     if (!el.status) return;
@@ -80,11 +92,24 @@ function buildProjectAssetUrl(relativePath) {
     return `/project/${encodeURI(raw.replace(/\\/g, "/").replace(/^\/+/, ""))}`;
 }
 
+function buildSkillIconUrl(pathValue) {
+    const raw = String(pathValue || "").trim();
+    if (!raw) return "";
+    const apiMatch = raw.match(/^\/api\/skill-icons\/([^/?#]+)$/i);
+    if (apiMatch) return `/api/skill-icons/${apiMatch[1]}`;
+    const resourceMatch = raw.match(/^resources\/images\/skill_icons\/([^/?#]+)$/i);
+    if (resourceMatch) return `/api/skill-icons/${encodeURIComponent(resourceMatch[1])}`;
+    return buildProjectAssetUrl(raw);
+}
+
 async function fetchWanderer() {
     const response = await fetch("/api/player/wanderer");
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Failed to load wanderer data.");
     state.playerClass = payload.playerClass || null;
+    if (state.playerClass && typeof state.playerClass === "object") {
+        state.playerClass.description = toPlainText(state.playerClass.description);
+    }
     state.dirty = {};
     refreshActionButtons();
 }
@@ -99,8 +124,25 @@ async function fetchAvailableItems() {
         id: String(entry.id || ""),
         name: String(entry.name || entry.id || ""),
         image: String(entry.image || ""),
-        kind: String(entry.kind || (entry.gearType ? "gear" : "item"))
+        kind: String(entry.kind || (entry.gearType ? "gear" : "item")),
+        functionDesc: String(entry.functionDesc || "")
     })).filter(entry => entry.id);
+}
+
+async function fetchAvailableSkills() {
+    const response = await fetch("/api/skills", { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Failed to load skills.");
+    const skills = Array.isArray(payload.skills) ? payload.skills : [];
+    state.availableSkills = skills
+        .map(entry => ({
+            id: String(entry.id || ""),
+            name: String(entry.name || entry.id || ""),
+            skillType: String(entry.skillType || "passive"),
+            image: String(entry.image || ""),
+            desc: String(entry.desc || "")
+        }))
+        .filter(entry => entry.id);
 }
 
 async function saveWanderer() {
@@ -111,11 +153,14 @@ async function saveWanderer() {
     const current = state.playerClass || {};
     const payload = {
         name: getDirty("name", current.name),
-        description: getDirty("description", current.description),
+        description: toPlainText(getDirty("description", current.description)),
         locked: getDirty("locked", current.locked),
         gold: Number(getDirty("gold", current.gold)),
         inventory: Array.isArray(getDirty("inventory", current.inventory || []))
             ? getDirty("inventory", current.inventory || [])
+            : [],
+        passiveSkills: Array.isArray(getDirty("passiveSkills", current.passiveSkills || []))
+            ? getDirty("passiveSkills", current.passiveSkills || [])
             : [],
         portrait: getDirty("portrait", current.portrait),
         skillCardPortrait: getDirty("skillCardPortrait", current.skillCardPortrait),
@@ -130,14 +175,6 @@ async function saveWanderer() {
             crit: Number(getDirty("baseStats.crit", current.baseStats && current.baseStats.crit)),
             dodge: Number(getDirty("baseStats.dodge", current.baseStats && current.baseStats.dodge)),
             aim: Number(getDirty("baseStats.aim", current.baseStats && current.baseStats.aim))
-        },
-        levelUpGrowth: {
-            hp: Number(getDirty("levelUpGrowth.hp", current.levelUpGrowth && current.levelUpGrowth.hp)),
-            atk: Number(getDirty("levelUpGrowth.atk", current.levelUpGrowth && current.levelUpGrowth.atk)),
-            def: Number(getDirty("levelUpGrowth.def", current.levelUpGrowth && current.levelUpGrowth.def)),
-            crit: Number(getDirty("levelUpGrowth.crit", current.levelUpGrowth && current.levelUpGrowth.crit)),
-            dodge: Number(getDirty("levelUpGrowth.dodge", current.levelUpGrowth && current.levelUpGrowth.dodge)),
-            aim: Number(getDirty("levelUpGrowth.aim", current.levelUpGrowth && current.levelUpGrowth.aim))
         }
     };
     setStatus("Saving wanderer...");
@@ -284,6 +321,83 @@ function createImageField(label, path, target) {
     return wrap;
 }
 
+function createCenteredPickerModal({ modalId, title, entries, getLabel, getImagePath, onPick, optionImageClass = "player-item-option-image" }) {
+    if (modalId) {
+        const existing = document.getElementById(modalId);
+        if (existing && existing.parentElement) existing.parentElement.removeChild(existing);
+    }
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop hidden";
+    if (modalId) backdrop.id = modalId;
+    const card = document.createElement("div");
+    card.className = "modal-card";
+    const heading = document.createElement("h2");
+    heading.className = "modal-title";
+    heading.textContent = title;
+    const list = document.createElement("div");
+    list.className = "player-item-picker";
+    list.style.position = "static";
+    list.style.width = "100%";
+    list.style.maxHeight = "50vh";
+    list.style.display = "flex";
+    const actions = document.createElement("div");
+    actions.className = "modal-actions";
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.textContent = "Close";
+    actions.appendChild(closeBtn);
+    card.appendChild(heading);
+    card.appendChild(list);
+    card.appendChild(actions);
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+
+    const close = () => backdrop.classList.add("hidden");
+    const open = () => backdrop.classList.remove("hidden");
+
+    closeBtn.addEventListener("click", close);
+    backdrop.addEventListener("click", event => {
+        if (event.target === backdrop) close();
+    });
+
+    entries.forEach(entry => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "player-item-option";
+        const thumb = document.createElement("img");
+        thumb.className = optionImageClass;
+        thumb.alt = "";
+        const rawPath = String(getImagePath(entry) || "").trim();
+        const src = (/^https?:\/\//i.test(rawPath) || rawPath.startsWith("/api/") || rawPath.startsWith("/project/"))
+            ? rawPath
+            : buildProjectAssetUrl(rawPath);
+        if (src) thumb.src = src;
+        else thumb.classList.add("hidden");
+        const label = document.createElement("span");
+        label.className = "player-item-option-label";
+        label.textContent = getLabel(entry);
+        const meta = document.createElement("div");
+        meta.className = "player-item-option-meta";
+        meta.appendChild(label);
+        const descText = String(entry && entry.desc || "").trim();
+        if (descText) {
+            const desc = document.createElement("span");
+            desc.className = "player-item-option-desc";
+            desc.textContent = descText;
+            meta.appendChild(desc);
+        }
+        option.appendChild(thumb);
+        option.appendChild(meta);
+        option.addEventListener("click", () => {
+            onPick(entry);
+            close();
+        });
+        list.appendChild(option);
+    });
+
+    return { open, close, element: backdrop };
+}
+
 function render() {
     if (!el.panelList) return;
     el.panelList.innerHTML = "";
@@ -295,8 +409,9 @@ function render() {
 
     const topRow = document.createElement("div");
     topRow.className = "stats-row enemy-stats-row";
-    topRow.appendChild(createLabeledField("name", createTextInput("name", data.name)));
-    topRow.appendChild(createLabeledField("gold", createNumberInput("gold", data.gold || 0)));
+    const nameInput = createTextInput("name", data.name);
+    nameInput.classList.add("player-name-input");
+    topRow.appendChild(createLabeledField("name", nameInput));
     const lockedInput = document.createElement("input");
     lockedInput.type = "checkbox";
     lockedInput.className = "plain-checkbox";
@@ -311,16 +426,9 @@ function render() {
     const baseStatsRow = document.createElement("div");
     baseStatsRow.className = "stats-row enemy-stats-row";
     ["hp", "atk", "def", "crit", "dodge", "aim"].forEach(key => {
-        baseStatsRow.appendChild(createLabeledField(`base ${key}`, createNumberInput(`baseStats.${key}`, data.baseStats[key])));
+        baseStatsRow.appendChild(createLabeledField(key, createNumberInput(`baseStats.${key}`, data.baseStats[key])));
     });
     card.appendChild(baseStatsRow);
-
-    const growthRow = document.createElement("div");
-    growthRow.className = "stats-row enemy-stats-row";
-    ["hp", "atk", "def", "crit", "dodge", "aim"].forEach(key => {
-        growthRow.appendChild(createLabeledField(`growth ${key}`, createNumberInput(`levelUpGrowth.${key}`, data.levelUpGrowth[key])));
-    });
-    card.appendChild(growthRow);
 
     const itemsLabel = document.createElement("span");
     itemsLabel.className = "add-col-label";
@@ -340,10 +448,9 @@ function render() {
         itemsList.innerHTML = "";
         list.forEach(itemId => {
             const itemRef = state.availableItems.find(entry => entry.id === itemId);
-            const chip = document.createElement("button");
-            chip.type = "button";
+            const chip = document.createElement("div");
             chip.className = "player-item-chip";
-            chip.title = "Click to remove";
+            chip.title = itemRef && itemRef.functionDesc ? itemRef.functionDesc : "";
             const img = document.createElement("img");
             img.className = "player-item-chip-image";
             img.alt = "";
@@ -352,14 +459,21 @@ function render() {
             else img.classList.add("hidden");
             const name = document.createElement("span");
             name.textContent = itemRef ? itemRef.name : itemId;
+            const removeBtn = document.createElement("button");
+            removeBtn.type = "button";
+            removeBtn.className = "player-item-chip-remove";
+            removeBtn.title = "Remove item";
+            removeBtn.setAttribute("aria-label", "Remove item");
+            removeBtn.textContent = "×";
             chip.appendChild(img);
             chip.appendChild(name);
-            chip.addEventListener("click", () => {
+            removeBtn.addEventListener("click", () => {
                 const next = list.filter(id => id !== itemId);
                 setDirty("inventory", next, originalInventory);
                 render();
                 refreshActionButtons();
             });
+            chip.appendChild(removeBtn);
             itemsList.appendChild(chip);
         });
     };
@@ -372,23 +486,13 @@ function render() {
     addBtn.type = "button";
     addBtn.className = "btn-secondary";
     addBtn.textContent = "Add Item";
-    const picker = document.createElement("div");
-    picker.className = "player-item-picker hidden";
-    state.availableItems.forEach(entry => {
-        const option = document.createElement("button");
-        option.type = "button";
-        option.className = "player-item-option";
-        const thumb = document.createElement("img");
-        thumb.className = "player-item-option-image";
-        thumb.alt = "";
-        const src = buildProjectAssetUrl(entry.image);
-        if (src) thumb.src = src;
-        else thumb.classList.add("hidden");
-        const label = document.createElement("span");
-        label.textContent = entry.name;
-        option.appendChild(thumb);
-        option.appendChild(label);
-        option.addEventListener("click", () => {
+    const itemPickerModal = createCenteredPickerModal({
+        modalId: "player-item-picker-modal",
+        title: "Add Item",
+        entries: state.availableItems,
+        getLabel: entry => entry.name,
+        getImagePath: entry => entry.image,
+        onPick: entry => {
             const list = Array.isArray(getDirty("inventory", originalInventory))
                 ? getDirty("inventory", originalInventory)
                 : [];
@@ -398,23 +502,92 @@ function render() {
                 render();
                 refreshActionButtons();
             }
-            picker.classList.add("hidden");
-        });
-        picker.appendChild(option);
+        }
     });
-    addBtn.addEventListener("click", () => {
-        picker.classList.toggle("hidden");
-    });
-    document.addEventListener("click", event => {
-        if (picker.classList.contains("hidden")) return;
-        const target = event.target;
-        if (addWrap.contains(target)) return;
-        picker.classList.add("hidden");
-    });
+    addBtn.addEventListener("click", () => itemPickerModal.open());
     addWrap.appendChild(addBtn);
-    addWrap.appendChild(picker);
     itemsRow.appendChild(addWrap);
     card.appendChild(itemsRow);
+
+    const skillsLabel = document.createElement("span");
+    skillsLabel.className = "add-col-label";
+    skillsLabel.textContent = "skills";
+    card.appendChild(skillsLabel);
+
+    const skillsRow = document.createElement("div");
+    skillsRow.className = "player-items-row";
+
+    const skillsList = document.createElement("div");
+    skillsList.className = "player-items-list";
+    const originalSkills = Array.isArray(data.passiveSkills) ? data.passiveSkills : [];
+    const currentSkills = Array.isArray(getDirty("passiveSkills", originalSkills))
+        ? getDirty("passiveSkills", originalSkills)
+        : [];
+    const renderSkillChips = list => {
+        skillsList.innerHTML = "";
+        list.forEach(skillId => {
+            const skillRef = state.availableSkills.find(entry => entry.id === skillId);
+            const chip = document.createElement("div");
+            chip.className = "player-item-chip";
+            chip.title = skillRef && skillRef.desc ? skillRef.desc : "";
+            const img = document.createElement("img");
+            img.className = "player-item-chip-image";
+            img.alt = "";
+            const src = buildSkillIconUrl(skillRef && skillRef.image);
+            if (src) img.src = src;
+            else img.classList.add("hidden");
+            const name = document.createElement("span");
+            name.textContent = skillRef ? `${skillRef.name} (${skillRef.skillType})` : skillId;
+            const removeBtn = document.createElement("button");
+            removeBtn.type = "button";
+            removeBtn.className = "player-item-chip-remove";
+            removeBtn.title = "Remove skill";
+            removeBtn.setAttribute("aria-label", "Remove skill");
+            removeBtn.textContent = "×";
+            chip.appendChild(img);
+            chip.appendChild(name);
+            removeBtn.addEventListener("click", () => {
+                const next = list.filter(id => id !== skillId);
+                setDirty("passiveSkills", next, originalSkills);
+                render();
+                refreshActionButtons();
+            });
+            chip.appendChild(removeBtn);
+            skillsList.appendChild(chip);
+        });
+    };
+    renderSkillChips(currentSkills);
+    skillsRow.appendChild(skillsList);
+
+    const addSkillWrap = document.createElement("div");
+    addSkillWrap.className = "player-item-add-wrap";
+    const addSkillBtn = document.createElement("button");
+    addSkillBtn.type = "button";
+    addSkillBtn.className = "btn-secondary";
+    addSkillBtn.textContent = "Add Skill";
+    const skillPickerModal = createCenteredPickerModal({
+        modalId: "player-skill-picker-modal",
+        title: "Add Skill",
+        entries: state.availableSkills,
+        getLabel: entry => `${entry.name} (${entry.skillType})`,
+        getImagePath: entry => buildSkillIconUrl(entry.image),
+        optionImageClass: "player-skill-option-image",
+        onPick: entry => {
+            const list = Array.isArray(getDirty("passiveSkills", originalSkills))
+                ? getDirty("passiveSkills", originalSkills)
+                : [];
+            if (!list.includes(entry.id)) {
+                const next = [...list, entry.id];
+                setDirty("passiveSkills", next, originalSkills);
+                render();
+                refreshActionButtons();
+            }
+        }
+    });
+    addSkillBtn.addEventListener("click", () => skillPickerModal.open());
+    addSkillWrap.appendChild(addSkillBtn);
+    skillsRow.appendChild(addSkillWrap);
+    card.appendChild(skillsRow);
 
     const descRow = document.createElement("div");
     descRow.className = "add-media-row";
@@ -459,10 +632,11 @@ function render() {
 
 async function init() {
     setStatus("Loading wanderer class data...");
-    await Promise.all([fetchWanderer(), fetchAvailableItems()]);
+    await Promise.all([fetchWanderer(), fetchAvailableItems(), fetchAvailableSkills()]);
     render();
     refreshActionButtons();
     setStatus("Loaded Wanderer class.", "ok");
 }
 
 init().catch(error => setStatus(error.message, "err"));
+

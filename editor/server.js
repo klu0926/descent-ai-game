@@ -2,10 +2,9 @@ const http = require("http");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
-const os = require("os");
 const { spawn } = require("child_process");
 const { URL } = require("url");
-const tinify = require("tinify");
+const { createTinyPngApi } = require("./api/tinyPng");
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = 8787;
@@ -18,15 +17,26 @@ const PLAYER_CLASS_ROOT = path.join(PROJECT_ROOT, "entity", "player_class");
 const WANDERER_DATA_FILE = path.join(PLAYER_CLASS_ROOT, "wanderer", "wanderer_data.js");
 const INDEX_FILE = path.join(ENEMY_ROOT, "index.js");
 const ENEMY_TYPE_DATA_FILE = path.join(ENEMY_ROOT, "enemy_type_data.js");
-const LEVEL_DATA_FILE = path.join(PROJECT_ROOT, "level", "level.js");
+const LEVEL_DATA_FILE = path.join(PROJECT_ROOT, "content", "levels", "level.js");
+const CUTSCENE_VIDEO_ROOTS = [
+    path.join(PROJECT_ROOT, "resources", "cutscene", "cutscene_video"),
+    path.join(PROJECT_ROOT, "scenes", "cutscene", "cutscene_video"),
+    path.join(PROJECT_ROOT, "event", "cutscene", "cutscene_video")
+];
 const ITEMS_ROOT = path.join(PROJECT_ROOT, "items");
 const ITEM_CLASS_ROOT = path.join(ITEMS_ROOT, "consumable");
 const GEAR_CLASS_ROOT = path.join(ITEMS_ROOT, "gears");
 const ITEMS_IMAGE_DIR = path.join(ITEMS_ROOT, "items_images");
 const GEARS_IMAGE_DIR = path.join(ITEMS_ROOT, "gear_images");
 const GAME_DATA_FILE = path.join(PROJECT_ROOT, "data", "data.js");
+const EVENT_REGISTRY_FILE = path.join(PROJECT_ROOT, "data", "events.json");
+const SKILLS_ROOT = path.join(PROJECT_ROOT, "skills");
+const PASSIVE_SKILL_ROOT = path.join(SKILLS_ROOT, "p_skill");
+const ACTIVE_SKILL_ROOT = path.join(SKILLS_ROOT, "a_skill");
+const SKILL_ICON_ROOT = path.join(PROJECT_ROOT, "resources", "images", "skill_icons");
 const PUBLIC_ROOT = path.join(__dirname, "public");
-const EDITOR_ENV_FILE = path.join(__dirname, ".env");
+const EDITOR_ENV_FILE = path.join(__dirname, '.env');
+const tinyPngApi = createTinyPngApi({ editorEnvFile: EDITOR_ENV_FILE });
 const IS_WATCH_SUPERVISOR = !process.env[CHILD_ENV_FLAG] && !process.argv.includes(DISABLE_WATCH_FLAG);
 const LIVE_RELOAD_EXTENSIONS = new Set([".css", ".js", ".html"]);
 
@@ -34,12 +44,79 @@ const liveReloadClients = new Set();
 let liveReloadKeepAliveTimer = null;
 let liveReloadWatcher = null;
 
-const FIELD_ORDER = ["name", "img", "type", "size", "levels", "hp", "atk", "def", "crit", "dodge", "aim", "exp", "desc"];
+const FIELD_ORDER = ["name", "img", "type", "size", "hp", "atk", "def", "crit", "dodge", "aim", "essence", "canAttack", "desc"];
 const ALLOWED_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]);
 const ITEM_TYPE_OPTIONS = ["consumable", "material", "quest", "misc"];
 const CONSUMABLE_TYPE_OPTIONS = ["healing", "buff", "utility", "none"];
 const GEAR_TYPE_OPTIONS = ["weapon", "armor", "accessory"];
 const GEAR_SLOT_OPTIONS = ["helmet", "body", "shoes", "hands", "weapon", "relic"];
+const SKILL_TYPE_OPTIONS = ["passive", "buff", "debuff", "active"];
+const SKILL_TARGET_OPTIONS = ["enemy", "player", "self", "ally", "all_enemies", "all_allies", "none"];
+const SKILL_MODE_OPTIONS = ["on_use", "action", "passive", "instant", "toggle"];
+const SUPPORTED_PASSIVE_EFFECT_TYPES = new Set([
+    "counter_threshold_flag",
+    "set_turns_on_event",
+    "arm_flag_if_flag",
+    "add_hp",
+    "add_hp_percent",
+    "reduce_hp",
+    "reduce_hp_percent",
+    "heal",
+    "heal_percent_max_hp",
+    "damage_enemy_flat",
+    "dodge",
+    "damage_enemy_percent_max_hp",
+    "counter_attack",
+    "add_atk",
+    "reduce_atk",
+    "add_defence",
+    "add_def",
+    "reduce_def",
+    "add_crit",
+    "reduce_crit",
+    "add_dodge",
+    "reduce_dodge",
+    "add_aim",
+    "reduce_aim",
+    "set_flag",
+    "clear_flag",
+    "add_counter"
+]);
+const DEFAULT_EVENT_REGISTRY = Object.freeze({
+    events: [
+        { id: "loop_started", name: "LOOP_STARTED", eventName: "game:loop_started", scope: "game", description: "Game loop started.", core: true },
+        { id: "loop_stopped", name: "LOOP_STOPPED", eventName: "game:loop_stopped", scope: "game", description: "Game loop stopped.", core: true },
+        { id: "loop_skipped", name: "LOOP_SKIPPED", eventName: "game:loop_skipped", scope: "game", description: "Game loop tick skipped.", core: true },
+        { id: "turn_tick", name: "TURN_TICK", eventName: "game:turn_tick", scope: "game", description: "Main turn tick.", core: true },
+        { id: "player_hit", name: "PLAYER_HIT", eventName: "combat:player_hit", scope: "game", description: "Player took damage.", core: true },
+        { id: "heal_item_used", name: "HEAL_ITEM_USED", eventName: "combat:heal_item_used", scope: "game", description: "A healing consumable was used by the player.", core: true },
+        { id: "player_dodge", name: "PLAYER_DODGE", eventName: "combat:player_dodge", scope: "game", description: "Player dodged an attack.", core: true },
+        { id: "player_block", name: "PLAYER_BLOCK", eventName: "combat:player_block", scope: "game", description: "Player blocked an attack.", core: true },
+        { id: "player_attack", name: "PLAYER_ATTACK", eventName: "combat:player_attack", scope: "game", description: "Player initiated an attack.", core: true },
+        { id: "enemy_hit", name: "ENEMY_HIT", eventName: "combat:enemy_hit", scope: "game", description: "Enemy took damage.", core: true },
+        { id: "enemy_dodge", name: "ENEMY_DODGE", eventName: "combat:enemy_dodge", scope: "game", description: "Enemy dodged an attack.", core: true },
+        { id: "enemy_block", name: "ENEMY_BLOCK", eventName: "combat:enemy_block", scope: "game", description: "Enemy blocked an attack.", core: true },
+        { id: "enemy_attack", name: "ENEMY_ATTACK", eventName: "combat:enemy_attack", scope: "game", description: "Enemy initiated an attack.", core: true },
+        { id: "player_turn_start", name: "PLAYER_TURN_START", eventName: "combat:player_turn_start", scope: "game", description: "Player turn started.", core: true },
+        { id: "enemy_turn_start", name: "ENEMY_TURN_START", eventName: "combat:enemy_turn_start", scope: "game", description: "Enemy turn started.", core: true },
+        { id: "level_started", name: "LEVEL_STARTED", eventName: "game:level_started", scope: "game", description: "Level started.", core: true },
+        { id: "battle_won", name: "BATTLE_WON", eventName: "game:battle_won", scope: "game", description: "Battle won.", core: true },
+        { id: "battle_lost", name: "BATTLE_LOST", eventName: "game:battle_lost", scope: "game", description: "Battle lost.", core: true },
+        { id: "combat_started", name: "COMBAT_STARTED", eventName: "combat:started", scope: "combat", description: "Combat started.", core: true },
+        { id: "combat_ended", name: "COMBAT_ENDED", eventName: "combat:ended", scope: "combat", description: "Combat ended.", core: true },
+        { id: "round_started", name: "ROUND_STARTED", eventName: "combat:round_started", scope: "combat", description: "Round started.", core: true },
+        { id: "round_ended", name: "ROUND_ENDED", eventName: "combat:round_ended", scope: "combat", description: "Round ended.", core: true },
+        { id: "turn_started", name: "TURN_STARTED", eventName: "combat:turn_started", scope: "combat", description: "Combat turn started.", core: true },
+        { id: "turn_ended", name: "TURN_ENDED", eventName: "combat:turn_ended", scope: "combat", description: "Combat turn ended.", core: true },
+        { id: "action_declared", name: "ACTION_DECLARED", eventName: "combat:action_declared", scope: "combat", description: "Action declared.", core: true },
+        { id: "action_resolved", name: "ACTION_RESOLVED", eventName: "combat:action_resolved", scope: "combat", description: "Action resolved.", core: true },
+        { id: "damage_applied", name: "DAMAGE_APPLIED", eventName: "combat:damage_applied", scope: "combat", description: "Damage applied.", core: true },
+        { id: "heal_applied", name: "HEAL_APPLIED", eventName: "combat:heal_applied", scope: "combat", description: "Heal applied.", core: true },
+        { id: "character_defeated", name: "CHARACTER_DEFEATED", eventName: "combat:character_defeated", scope: "combat", description: "Character defeated.", core: true },
+        { id: "status_applied", name: "STATUS_APPLIED", eventName: "combat:status_applied", scope: "combat", description: "Status applied.", core: true },
+        { id: "status_expired", name: "STATUS_EXPIRED", eventName: "combat:status_expired", scope: "combat", description: "Status expired.", core: true }
+    ]
+});
 
 function normalizeGearSlotType(value, fallback = "body") {
     const raw = String(value || "").trim().toLowerCase();
@@ -55,381 +132,6 @@ function inferGearTypeFromSlotType(slotType) {
     if (slot === "weapon") return "weapon";
     if (slot === "relic") return "accessory";
     return "armor";
-}
-function readEnvKeyFromFile(filePath, keyName) {
-    try {
-        if (!fs.existsSync(filePath)) return "";
-        const content = fs.readFileSync(filePath, "utf8");
-        const lines = content.split(/\r?\n/);
-        for (const rawLine of lines) {
-            const line = String(rawLine || "").trim();
-            if (!line || line.startsWith("#")) continue;
-            const eqIndex = line.indexOf("=");
-            if (eqIndex < 0) continue;
-            const name = line.slice(0, eqIndex).trim();
-            if (name !== keyName) continue;
-            const valueRaw = line.slice(eqIndex + 1).trim();
-            if (
-                (valueRaw.startsWith("\"") && valueRaw.endsWith("\"")) ||
-                (valueRaw.startsWith("'") && valueRaw.endsWith("'"))
-            ) {
-                return valueRaw.slice(1, -1).trim();
-            }
-            return valueRaw;
-        }
-        return "";
-    } catch (_) {
-        return "";
-    }
-}
-const TINIFY_API_KEY = String(
-    process.env.TINIFY_API_KEY ||
-    process.env.TINYPNG_API_KEY ||
-    readEnvKeyFromFile(EDITOR_ENV_FILE, "TINIFY_API_KEY") ||
-    readEnvKeyFromFile(EDITOR_ENV_FILE, "TINYPNG_API_KEY") ||
-    ""
-).trim();
-function parseReductionPercent(input, fallback) {
-    const numeric = Number.parseFloat(String(input || "").trim());
-    if (!Number.isFinite(numeric)) return fallback;
-    if (numeric < 1 || numeric > 95) return fallback;
-    return numeric;
-}
-const LEVEL_IMAGE_TARGET_REDUCTION_PERCENT = parseReductionPercent(
-    process.env.LEVEL_IMAGE_TARGET_REDUCTION_PERCENT ||
-    readEnvKeyFromFile(EDITOR_ENV_FILE, "LEVEL_IMAGE_TARGET_REDUCTION_PERCENT"),
-    75
-);
-const TINIFY_REQUEST_TIMEOUT_MS = 20000;
-const LARGE_BACKGROUND_THRESHOLD_BYTES = 3 * 1024 * 1024;
-const BACKGROUND_TARGET_WIDTH = 768;
-const BACKGROUND_TARGET_HEIGHT = 512;
-let tinifyConfigured = false;
-let tinifyLoggedMissingKey = false;
-
-function withTimeout(promise, timeoutMs, label = "operation") {
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            reject(new Error(`${label}_timeout`));
-        }, timeoutMs);
-        Promise.resolve(promise)
-            .then(value => {
-                clearTimeout(timer);
-                resolve(value);
-            })
-            .catch(error => {
-                clearTimeout(timer);
-                reject(error);
-            });
-    });
-}
-
-function sendJson(res, status, payload) {
-    const body = JSON.stringify(payload);
-    res.writeHead(status, {
-        "Content-Type": "application/json; charset=utf-8",
-        "Content-Length": Buffer.byteLength(body)
-    });
-    res.end(body);
-}
-
-function sendText(res, status, body, contentType = "text/plain; charset=utf-8") {
-    res.writeHead(status, {
-        "Content-Type": contentType,
-        "Content-Length": Buffer.byteLength(body)
-    });
-    res.end(body);
-}
-
-function getContentTypeByExt(ext) {
-    const normalized = String(ext || "").toLowerCase();
-    if (normalized === ".html") return "text/html; charset=utf-8";
-    if (normalized === ".js") return "application/javascript; charset=utf-8";
-    if (normalized === ".css") return "text/css; charset=utf-8";
-    if (normalized === ".png") return "image/png";
-    if (normalized === ".jpg" || normalized === ".jpeg") return "image/jpeg";
-    if (normalized === ".gif") return "image/gif";
-    if (normalized === ".webp") return "image/webp";
-    if (normalized === ".svg") return "image/svg+xml";
-    return "application/octet-stream";
-}
-
-function sanitizeId(input) {
-    return String(input || "")
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9_]+/g, "_")
-        .replace(/^_+|_+$/g, "");
-}
-
-function toPascalCase(input) {
-    return String(input)
-        .split(/[^a-zA-Z0-9]+/)
-        .filter(Boolean)
-        .map(chunk => chunk.charAt(0).toUpperCase() + chunk.slice(1))
-        .join("");
-}
-
-function makeConstName(enemyId) {
-    return `${toPascalCase(enemyId)}_ENEMY`.toUpperCase();
-}
-
-function getEnemyFilePath(enemyId) {
-    return path.join(ENEMY_ROOT, enemyId, `${enemyId}_data.js`);
-}
-
-function sanitizeFilename(input) {
-    const value = String(input || "");
-    return value.replace(/[^a-zA-Z0-9._-]/g, "_");
-}
-
-function configureTinifyIfNeeded() {
-    if (tinifyConfigured) return Boolean(tinify.key);
-    tinifyConfigured = true;
-    if (TINIFY_API_KEY) {
-        tinify.key = TINIFY_API_KEY;
-        return true;
-    }
-    if (!tinifyLoggedMissingKey) {
-        console.warn("[image] TinyPNG disabled: set TINIFY_API_KEY to enable upload compression.");
-        tinifyLoggedMissingKey = true;
-    }
-    return false;
-}
-
-async function compressImageWithTinify(inputBuffer, extension) {
-    const normalizedExt = String(extension || "").toLowerCase();
-    const compressible = new Set([".png", ".jpg", ".jpeg", ".webp"]);
-    if (!compressible.has(normalizedExt)) {
-        return { buffer: inputBuffer, compressed: false, reason: "unsupported_extension", attemptsUsed: 0, maxAttempts: 1 };
-    }
-    if (!configureTinifyIfNeeded()) {
-        return { buffer: inputBuffer, compressed: false, reason: "missing_api_key", attemptsUsed: 0, maxAttempts: 1 };
-    }
-    try {
-        const optimized = await withTimeout(
-            tinify.fromBuffer(inputBuffer).toBuffer(),
-            TINIFY_REQUEST_TIMEOUT_MS,
-            "tinify"
-        );
-        if (!optimized || optimized.length === 0) {
-            return { buffer: inputBuffer, compressed: false, reason: "empty_result", attemptsUsed: 1, maxAttempts: 1 };
-        }
-        if (optimized.length >= inputBuffer.length) {
-            return { buffer: inputBuffer, compressed: false, reason: "not_smaller", attemptsUsed: 1, maxAttempts: 1 };
-        }
-        return { buffer: optimized, compressed: true, reason: "ok", attemptsUsed: 1, maxAttempts: 1 };
-    } catch (error) {
-        if (String(error && error.message || "").includes("tinify_timeout")) {
-            console.warn("[image] TinyPNG compression timed out; using original image.");
-            return { buffer: inputBuffer, compressed: false, reason: "tinify_timeout", attemptsUsed: 1, maxAttempts: 1 };
-        }
-        console.warn(`[image] TinyPNG compression skipped: ${error.message}`);
-        return { buffer: inputBuffer, compressed: false, reason: "tinify_error", attemptsUsed: 1, maxAttempts: 1 };
-    }
-}
-
-async function compressEnemyImageWithFallback(inputBuffer, extension) {
-    const baseResult = await compressImageWithTinify(inputBuffer, extension);
-    const initialSize = inputBuffer.length;
-    let bestBuffer = baseResult.buffer;
-    let bestReason = baseResult.reason;
-    let attemptsUsed = Number.isFinite(baseResult.attemptsUsed) ? baseResult.attemptsUsed : 0;
-    const maxAttempts = 2;
-
-    const normalizedExt = String(extension || "").toLowerCase();
-    const compressible = new Set([".png", ".jpg", ".jpeg", ".webp"]);
-    const shouldTryResize =
-        TINIFY_API_KEY &&
-        compressible.has(normalizedExt) &&
-        bestReason === "not_smaller" &&
-        initialSize > 150 * 1024;
-
-    if (shouldTryResize) {
-        attemptsUsed += 1;
-        try {
-            const resized = await withTimeout(
-                tinify
-                    .fromBuffer(inputBuffer)
-                    .resize({
-                        method: "fit",
-                        width: 1024,
-                        height: 1024
-                    })
-                    .toBuffer(),
-                TINIFY_REQUEST_TIMEOUT_MS,
-                "tinify_enemy_resize"
-            );
-            if (resized && resized.length > 0 && resized.length < bestBuffer.length) {
-                bestBuffer = resized;
-                bestReason = "resize_1024x1024";
-            }
-        } catch (error) {
-            if (String(error && error.message || "").includes("tinify_enemy_resize_timeout")) {
-                console.warn("[image] TinyPNG enemy resize timed out; keeping original result.");
-            } else {
-                console.warn(`[image] TinyPNG enemy resize fallback skipped: ${error.message}`);
-            }
-        }
-    }
-
-    return {
-        buffer: bestBuffer,
-        compressed: bestBuffer.length < initialSize,
-        reason: bestReason,
-        attemptsUsed,
-        maxAttempts
-    };
-}
-
-function calculateReductionPercent(originalBytes, finalBytes) {
-    const original = Number(originalBytes) || 0;
-    const finalSize = Number(finalBytes) || 0;
-    if (original <= 0 || finalSize >= original) return 0;
-    return Math.round(((original - finalSize) / original) * 1000) / 10;
-}
-
-async function compressLevelImageWithTarget(inputBuffer, extension) {
-    const baseResult = await compressImageWithTinify(inputBuffer, extension);
-    const initialSize = inputBuffer.length;
-    let bestBuffer = baseResult.buffer;
-    let bestReason = baseResult.reason;
-    let attemptsUsed = Number.isFinite(baseResult.attemptsUsed) ? baseResult.attemptsUsed : 0;
-    const maxAttempts = initialSize > LARGE_BACKGROUND_THRESHOLD_BYTES ? 3 : 2;
-
-    const targetBytes = Math.floor(initialSize * (1 - (LEVEL_IMAGE_TARGET_REDUCTION_PERCENT / 100)));
-    if (
-        !TINIFY_API_KEY ||
-        targetBytes <= 0 ||
-        bestBuffer.length <= targetBytes
-    ) {
-        return {
-            ...baseResult,
-            targetReductionPercent: LEVEL_IMAGE_TARGET_REDUCTION_PERCENT,
-            reductionPercent: calculateReductionPercent(initialSize, bestBuffer.length),
-            attemptsUsed,
-            maxAttempts
-        };
-    }
-
-    const normalizedExt = String(extension || "").toLowerCase();
-    const compressible = new Set([".png", ".jpg", ".jpeg", ".webp"]);
-    if (!compressible.has(normalizedExt)) {
-        return {
-            ...baseResult,
-            targetReductionPercent: LEVEL_IMAGE_TARGET_REDUCTION_PERCENT,
-            reductionPercent: calculateReductionPercent(initialSize, bestBuffer.length),
-            attemptsUsed,
-            maxAttempts
-        };
-    }
-
-    // Background images: 2 attempts by default; up to 3 when source image is very large.
-    const resizeCandidates = [
-        { width: 1600, height: 900 },
-        { width: 1280, height: 720 }
-    ];
-    const allowedResizeAttempts = Math.max(0, maxAttempts - 1);
-
-    for (const candidate of resizeCandidates.slice(0, allowedResizeAttempts)) {
-        attemptsUsed += 1;
-        try {
-            const resized = await withTimeout(
-                tinify
-                    .fromBuffer(inputBuffer)
-                    .resize({
-                        method: "fit",
-                        width: candidate.width,
-                        height: candidate.height
-                    })
-                    .toBuffer(),
-                TINIFY_REQUEST_TIMEOUT_MS,
-                "tinify_resize"
-            );
-            if (!resized || resized.length <= 0) continue;
-            if (resized.length < bestBuffer.length) {
-                bestBuffer = resized;
-                bestReason = `resize_${candidate.width}x${candidate.height}`;
-            }
-            if (bestBuffer.length <= targetBytes) break;
-        } catch (error) {
-            if (String(error && error.message || "").includes("tinify_resize_timeout")) {
-                console.warn("[image] TinyPNG resize timed out; stopping extra resize attempts.");
-                break;
-            }
-            console.warn(`[image] TinyPNG resize fallback skipped: ${error.message}`);
-        }
-    }
-
-    return {
-        buffer: bestBuffer,
-        compressed: bestBuffer.length < initialSize,
-        reason: bestReason,
-        targetReductionPercent: LEVEL_IMAGE_TARGET_REDUCTION_PERCENT,
-        reductionPercent: calculateReductionPercent(initialSize, bestBuffer.length),
-        attemptsUsed,
-        maxAttempts
-    };
-}
-
-async function normalizeBackgroundImageDimensions(inputBuffer, extension) {
-    const normalizedExt = String(extension || "").toLowerCase();
-    const compressible = new Set([".png", ".jpg", ".jpeg", ".webp"]);
-    if (!compressible.has(normalizedExt)) {
-        return { buffer: inputBuffer, normalized: false, reason: "unsupported_extension" };
-    }
-    let workingBuffer = inputBuffer;
-    let tinifyReason = "missing_api_key";
-    if (configureTinifyIfNeeded()) {
-        try {
-            const resized = await withTimeout(
-                tinify
-                    .fromBuffer(inputBuffer)
-                    .resize({
-                        method: "cover",
-                        width: BACKGROUND_TARGET_WIDTH,
-                        height: BACKGROUND_TARGET_HEIGHT
-                    })
-                    .toBuffer(),
-                TINIFY_REQUEST_TIMEOUT_MS,
-                "tinify_background_normalize"
-            );
-            if (resized && resized.length > 0) {
-                workingBuffer = resized;
-                tinifyReason = "ok";
-            } else {
-                tinifyReason = "empty_result";
-            }
-        } catch (error) {
-            if (String(error && error.message || "").includes("tinify_background_normalize_timeout")) {
-                console.warn("[image] Background normalize timed out; using local resize fallback.");
-                tinifyReason = "normalize_timeout";
-            } else {
-                console.warn(`[image] Background normalize skipped: ${error.message}`);
-                tinifyReason = "normalize_error";
-            }
-        }
-    }
-
-    try {
-        const forced = await forceImageToExactDimensionsWithPowerShell(
-            workingBuffer,
-            normalizedExt,
-            BACKGROUND_TARGET_WIDTH,
-            BACKGROUND_TARGET_HEIGHT
-        );
-        if (forced && forced.length > 0) {
-            return {
-                buffer: forced,
-                normalized: true,
-                reason: tinifyReason === "ok" ? "ok+local_exact" : `local_exact:${tinifyReason}`
-            };
-        }
-        return { buffer: workingBuffer, normalized: tinifyReason === "ok", reason: tinifyReason };
-    } catch (error) {
-        console.warn(`[image] Local exact resize failed: ${error.message}`);
-        return { buffer: workingBuffer, normalized: tinifyReason === "ok", reason: `${tinifyReason}|local_resize_failed` };
-    }
 }
 
 function escapePowerShellSingleQuoted(value) {
@@ -471,70 +173,24 @@ function openFileLocationInExplorer(filePath) {
     return runPowerShellCommand(commandText);
 }
 
-async function forceImageToExactDimensionsWithPowerShell(inputBuffer, extension, targetWidth, targetHeight) {
-    const normalizedExt = String(extension || "").toLowerCase();
-    const outputFormat = normalizedExt === ".png" ? "png" : (normalizedExt === ".jpg" || normalizedExt === ".jpeg" ? "jpeg" : "");
-    if (!outputFormat) return inputBuffer;
+function sanitizeId(value) {
+    const normalized = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    return normalized;
+}
 
-    const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "bg-resize-"));
-    const inputPath = path.join(tempRoot, `input${normalizedExt}`);
-    const outputPath = path.join(tempRoot, `output${normalizedExt}`);
-    try {
-        await fsp.writeFile(inputPath, inputBuffer);
-        const psInputPath = escapePowerShellSingleQuoted(inputPath);
-        const psOutputPath = escapePowerShellSingleQuoted(outputPath);
-        const psFormat = outputFormat === "png" ? "[System.Drawing.Imaging.ImageFormat]::Png" : "[System.Drawing.Imaging.ImageFormat]::Jpeg";
-        const commandText = [
-            "$ErrorActionPreference = 'Stop'",
-            "Add-Type -AssemblyName System.Drawing",
-            `$srcPath = '${psInputPath}'`,
-            `$dstPath = '${psOutputPath}'`,
-            `$targetW = ${Number(targetWidth) || BACKGROUND_TARGET_WIDTH}`,
-            `$targetH = ${Number(targetHeight) || BACKGROUND_TARGET_HEIGHT}`,
-            "$img = [System.Drawing.Image]::FromFile($srcPath)",
-            "try {",
-            "  $bitmap = New-Object System.Drawing.Bitmap($targetW, $targetH)",
-            "  try {",
-            "    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)",
-            "    try {",
-            "      $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality",
-            "      $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic",
-            "      $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality",
-            "      $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality",
-            "      $srcRatio = [double]$img.Width / [double]$img.Height",
-            "      $dstRatio = [double]$targetW / [double]$targetH",
-            "      if ($srcRatio -gt $dstRatio) {",
-            "        $cropH = $img.Height",
-            "        $cropW = [int][Math]::Round($cropH * $dstRatio)",
-            "        $cropX = [int][Math]::Round(($img.Width - $cropW) / 2)",
-            "        $cropY = 0",
-            "      } else {",
-            "        $cropW = $img.Width",
-            "        $cropH = [int][Math]::Round($cropW / $dstRatio)",
-            "        $cropX = 0",
-            "        $cropY = [int][Math]::Round(($img.Height - $cropH) / 2)",
-            "      }",
-            "      if ($cropW -lt 1) { $cropW = 1 }",
-            "      if ($cropH -lt 1) { $cropH = 1 }",
-            "      $srcRect = New-Object System.Drawing.Rectangle($cropX, $cropY, $cropW, $cropH)",
-            "      $dstRect = New-Object System.Drawing.Rectangle(0, 0, $targetW, $targetH)",
-            "      $graphics.DrawImage($img, $dstRect, $srcRect, [System.Drawing.GraphicsUnit]::Pixel)",
-            "    } finally {",
-            "      if ($graphics) { $graphics.Dispose() }",
-            "    }",
-            `    $bitmap.Save($dstPath, ${psFormat})`,
-            "  } finally {",
-            "    if ($bitmap) { $bitmap.Dispose() }",
-            "  }",
-            "} finally {",
-            "  if ($img) { $img.Dispose() }",
-            "}"
-        ].join("; ");
-        await runPowerShellCommand(commandText);
-        return await fsp.readFile(outputPath);
-    } finally {
-        await fsp.rm(tempRoot, { recursive: true, force: true }).catch(() => {});
-    }
+function makeConstName(enemyId) {
+    const safeId = sanitizeId(enemyId) || "enemy";
+    return `${safeId.toUpperCase()}_ENEMY`;
+}
+
+function getEnemyFilePath(enemyId) {
+    const safeId = sanitizeId(enemyId);
+    if (!safeId) return "";
+    return path.join(ENEMY_ROOT, safeId, `${safeId}_data.js`);
 }
 
 function getUniqueEnemyId(baseId) {
@@ -579,14 +235,14 @@ function getDefaultEnemyRecord(enemyId) {
         img: `entity/enemy_class/${enemyId}/${enemyId}_images/${enemyId}.png`,
         type: "monster",
         size: "m",
-        levels: ["all"],
         hp: 50,
         atk: 8,
         def: 4,
         crit: 2,
         dodge: 2,
         aim: 2,
-        exp: 12,
+        essence: 1,
+        canAttack: true,
         desc: "Describe this enemy."
     };
 }
@@ -610,6 +266,13 @@ function parsePassivesArray(input) {
         .filter(Boolean);
 }
 
+function parseEventTriggersArray(input) {
+    if (!Array.isArray(input)) return [];
+    return input
+        .map(entry => String(entry || "").trim())
+        .filter(Boolean);
+}
+
 function parsePriceValue(input, fallback = 0) {
     const parsed = Number.parseInt(String(input ?? "").trim(), 10);
     if (Number.isFinite(parsed) && parsed >= 0) return parsed;
@@ -626,7 +289,7 @@ function parseFractionValue(input, fallback = 0) {
 
 function parseDurationMode(input, fallback = "once") {
     const normalized = String(input || fallback || "once").trim().toLowerCase();
-    if (normalized === "turn" || normalized === "round" || normalized === "once") return normalized;
+    if (normalized === "turn" || normalized === "scene" || normalized === "once") return normalized;
     return "once";
 }
 
@@ -791,12 +454,17 @@ function normalizeItemRecord(payload, existing = null) {
     const rawPrice = Object.prototype.hasOwnProperty.call(source, "price")
         ? source.price
         : base.price;
+    const itemType = ITEM_TYPE_OPTIONS.includes(String(source.itemType || base.itemType || "").trim())
+        ? String(source.itemType || base.itemType).trim()
+        : "consumable";
+    const parsedTriggers = parseEventTriggersArray(source.itemUseEventTriggers || base.itemUseEventTriggers);
+    const itemUseEventTriggers = (itemType === "consumable" && parsedTriggers.length === 0)
+        ? ["combat:heal_item_used"]
+        : parsedTriggers;
     return {
         id: sanitizeId(source.id || base.id || source.name || "item"),
         name: String(source.name || base.name || "New Item").trim(),
-        itemType: ITEM_TYPE_OPTIONS.includes(String(source.itemType || base.itemType || "").trim())
-            ? String(source.itemType || base.itemType).trim()
-            : "consumable",
+        itemType,
         consumableType: CONSUMABLE_TYPE_OPTIONS.includes(String(source.consumableType || base.consumableType || "").trim())
             ? String(source.consumableType || base.consumableType).trim()
             : "none",
@@ -828,6 +496,7 @@ function normalizeItemRecord(payload, existing = null) {
             1
         ) || 1,
         passives: parsePassivesArray(source.passives || base.passives),
+        itemUseEventTriggers,
         source: String(base.source || source.source || "custom").trim() || "custom",
         createdAt: String(base.createdAt || now),
         updatedAt: now
@@ -1003,6 +672,7 @@ function buildConstructorObjectLiteral(kind, record) {
         effectRounds: record.effectRounds,
         stats: record.stats || {},
         passives: record.passives || [],
+        itemUseEventTriggers: record.itemUseEventTriggers || [],
         storyDesc: record.storyDesc,
         functionDesc: record.functionDesc
     };
@@ -1157,8 +827,13 @@ function readWandererClassData() {
     } catch (_) {
         inventory = [];
     }
+    let passiveSkills = [];
+    try {
+        passiveSkills = evalLiteral(parseAssignedLiteral(content, "this.passiveSkills"));
+    } catch (_) {
+        passiveSkills = [];
+    }
     const baseStats = evalLiteral(parseAssignedLiteral(content, "this.baseStats"));
-    const levelUpGrowth = evalLiteral(parseAssignedLiteral(content, "this.levelUpGrowth"));
 
     return {
         id: "wanderer",
@@ -1170,8 +845,8 @@ function readWandererClassData() {
         locked: Boolean(locked),
         gold: toIntStat(gold, 0),
         inventory: Array.isArray(inventory) ? inventory.map(entry => sanitizeId(entry)).filter(Boolean) : [],
-        baseStats,
-        levelUpGrowth
+        passiveSkills: Array.isArray(passiveSkills) ? passiveSkills.map(entry => sanitizeId(entry)).filter(Boolean) : [],
+        baseStats
     };
 }
 
@@ -1195,7 +870,6 @@ function normalizeWandererPatch(payload = {}, current = null) {
     const source = payload && typeof payload === "object" ? payload : {};
     const existing = current || readWandererClassData();
     const nextBase = { ...(existing.baseStats || {}) };
-    const nextGrowth = { ...(existing.levelUpGrowth || {}) };
 
     if (source.baseStats && typeof source.baseStats === "object") {
         ["hp", "atk", "def", "crit", "dodge", "aim"].forEach(key => {
@@ -1204,14 +878,6 @@ function normalizeWandererPatch(payload = {}, current = null) {
             }
         });
     }
-    if (source.levelUpGrowth && typeof source.levelUpGrowth === "object") {
-        ["hp", "atk", "def", "crit", "dodge", "aim"].forEach(key => {
-            if (Object.prototype.hasOwnProperty.call(source.levelUpGrowth, key)) {
-                nextGrowth[key] = toIntStat(source.levelUpGrowth[key], nextGrowth[key] || 0);
-            }
-        });
-    }
-
     return {
         ...existing,
         name: Object.prototype.hasOwnProperty.call(source, "name") ? String(source.name || existing.name) : existing.name,
@@ -1221,6 +887,9 @@ function normalizeWandererPatch(payload = {}, current = null) {
         inventory: Object.prototype.hasOwnProperty.call(source, "inventory") && Array.isArray(source.inventory)
             ? source.inventory.map(entry => sanitizeId(entry)).filter(Boolean)
             : (Array.isArray(existing.inventory) ? existing.inventory.map(entry => sanitizeId(entry)).filter(Boolean) : []),
+        passiveSkills: Object.prototype.hasOwnProperty.call(source, "passiveSkills") && Array.isArray(source.passiveSkills)
+            ? source.passiveSkills.map(entry => sanitizeId(entry)).filter(Boolean)
+            : (Array.isArray(existing.passiveSkills) ? existing.passiveSkills.map(entry => sanitizeId(entry)).filter(Boolean) : []),
         portrait: Object.prototype.hasOwnProperty.call(source, "portrait") ? String(source.portrait || existing.portrait) : existing.portrait,
         skillCardPortrait: Object.prototype.hasOwnProperty.call(source, "skillCardPortrait") ? String(source.skillCardPortrait || existing.skillCardPortrait) : existing.skillCardPortrait,
         sprites: {
@@ -1231,8 +900,7 @@ function normalizeWandererPatch(payload = {}, current = null) {
                 ? String(source.sprites.block || existing.sprites.block)
                 : existing.sprites.block
         },
-        baseStats: nextBase,
-        levelUpGrowth: nextGrowth
+        baseStats: nextBase
     };
 }
 
@@ -1247,8 +915,8 @@ function writeWandererClassData(nextData) {
     updated = replaceAssignment(updated, "this.locked", nextData.locked ? "true" : "false");
     updated = replaceAssignment(updated, "this.gold", `${toIntStat(nextData.gold, 0)}`);
     updated = replaceAssignment(updated, "this.inventory", JSON.stringify(Array.isArray(nextData.inventory) ? nextData.inventory : [], null, 8));
+    updated = replaceAssignment(updated, "this.passiveSkills", JSON.stringify(Array.isArray(nextData.passiveSkills) ? nextData.passiveSkills : [], null, 8));
     updated = replaceAssignment(updated, "this.baseStats", JSON.stringify(nextData.baseStats || {}, null, 8));
-    updated = replaceAssignment(updated, "this.levelUpGrowth", JSON.stringify(nextData.levelUpGrowth || {}, null, 8));
     fs.writeFileSync(WANDERER_DATA_FILE, updated, "utf8");
 }
 
@@ -1288,13 +956,18 @@ function toSafeLevelNumber(input, fallback = 1) {
     return Math.max(1, Math.floor(parsed));
 }
 
-function normalizeLevelRound(round, fallbackBackground = "") {
-    const source = round && typeof round === "object" ? round : {};
+function normalizeLevelRound(scene, fallbackBackground = "") {
+    const source = scene && typeof scene === "object" ? scene : {};
     const rawType = String(source.type || "fight").trim().toLowerCase();
-    const normalizedType = rawType === "event" || rawType === "vendor" ? rawType : "fight";
+    const normalizedType = rawType === "cutscene" || rawType === "vendor" || rawType === "fight"
+        ? rawType
+        : (rawType === "event" ? "cutscene" : "fight");
     const enemyValue = source.enemy === null || typeof source.enemy === "undefined"
         ? null
         : String(source.enemy);
+    const cutsceneVideoValue = source.cutsceneVideo === null || typeof source.cutsceneVideo === "undefined"
+        ? null
+        : String(source.cutsceneVideo).trim().replace(/\\/g, "/").replace(/^\/+/, "");
     const vendorItemsRaw = Array.isArray(source.vendorItems) ? source.vendorItems : [];
     const vendorItems = Array.from(new Set(
         vendorItemsRaw
@@ -1304,13 +977,63 @@ function normalizeLevelRound(round, fallbackBackground = "") {
     const backgroundPath = String(source.background || fallbackBackground);
     const parsedBackgroundName = path.posix.parse(backgroundPath).name;
     const backgroundImageName = String(source.backgroundImageName || parsedBackgroundName || "").trim();
-    return {
+    const normalized = {
         enemy: enemyValue,
+        cutsceneVideo: cutsceneVideoValue || null,
         vendorItems,
         background: backgroundPath,
         backgroundImageName,
         type: normalizedType
     };
+    if (normalizedType === "vendor") {
+        normalized.enemy = null;
+        normalized.cutsceneVideo = null;
+    } else if (normalizedType === "cutscene") {
+        normalized.enemy = null;
+        normalized.vendorItems = [];
+    } else {
+        normalized.vendorItems = [];
+        normalized.cutsceneVideo = null;
+    }
+    return normalized;
+}
+
+async function listCutsceneVideos() {
+    const allowedExtensions = new Set([".webm", ".mp4", ".mov", ".m4v", ".ogv"]);
+    const existingRoots = CUTSCENE_VIDEO_ROOTS.filter(root => fs.existsSync(root));
+    if (existingRoots.length <= 0) return [];
+
+    const outputByPath = new Map();
+    const walk = async dirPath => {
+        let entries = [];
+        try {
+            entries = await fsp.readdir(dirPath, { withFileTypes: true });
+        } catch (_) {
+            return;
+        }
+        for (const entry of entries) {
+            const absPath = path.join(dirPath, entry.name);
+            if (entry.isDirectory()) {
+                await walk(absPath);
+                continue;
+            }
+            const ext = String(path.extname(entry.name || "")).toLowerCase();
+            if (!allowedExtensions.has(ext)) continue;
+            const relPath = path.relative(PROJECT_ROOT, absPath).replace(/\\/g, "/");
+            if (!outputByPath.has(relPath)) {
+                outputByPath.set(relPath, {
+                    id: relPath,
+                    name: path.posix.basename(relPath),
+                    path: relPath
+                });
+            }
+        }
+    };
+    for (const root of existingRoots) {
+        await walk(root);
+    }
+    return Array.from(outputByPath.values())
+        .sort((a, b) => String(a.path || "").localeCompare(String(b.path || "")));
 }
 
 function normalizeLevelRecord(level) {
@@ -1335,16 +1058,27 @@ function normalizeLevelRecord(level) {
         .filter(Boolean)
         .filter(fileExistsInProject);
     const fallbackBackground = backgroundImages[0] || "";
-    const roundsRaw = Array.isArray(source.rounds) ? source.rounds : [];
-    const rounds = roundsRaw.length > 0
-        ? roundsRaw.map(round => normalizeLevelRound(round, fallbackBackground))
+    const scenesRaw = Array.isArray(source.scenes)
+        ? source.scenes
+        : (Array.isArray(source.rounds) ? source.rounds : []);
+    const scenes = scenesRaw.length > 0
+        ? scenesRaw.map(scene => normalizeLevelRound(scene, fallbackBackground))
         : [normalizeLevelRound({}, fallbackBackground)];
     return {
         id,
         name,
         backgroundImages,
-        rounds
+        scenes
     };
+}
+
+function sanitizeFilename(input) {
+    const raw = String(input || "").trim();
+    if (!raw) return "upload.png";
+    const normalized = path.basename(raw).replace(/[^\w.\- ]+/g, "_").trim();
+    if (!normalized) return "upload.png";
+    if (!path.extname(normalized)) return `${normalized}.png`;
+    return normalized;
 }
 
 function sanitizeImageBaseName(input, fallback) {
@@ -1398,12 +1132,12 @@ function getLevelBackgroundUsage(levels, backgroundPath) {
     const normalizedPath = normalizeProjectRelativeFilePath(backgroundPath);
     const usage = [];
     (Array.isArray(levels) ? levels : []).forEach(level => {
-        const rounds = Array.isArray(level.rounds) ? level.rounds : [];
-        rounds.forEach((round, roundIndex) => {
-            if (normalizeProjectRelativeFilePath(round && round.background) === normalizedPath) {
+        const scenes = Array.isArray(level.scenes) ? level.scenes : [];
+        scenes.forEach((scene, sceneIndex) => {
+            if (normalizeProjectRelativeFilePath(scene && scene.background) === normalizedPath) {
                 usage.push({
                     levelId: toSafeLevelNumber(level && level.id, 1),
-                    round: roundIndex + 1
+                    scene: sceneIndex + 1
                 });
             }
         });
@@ -1447,16 +1181,16 @@ function listLevelBackgrounds(levels) {
         backgroundImages.forEach(backgroundPath => {
             ensureEntry(levelId, backgroundPath);
         });
-        const rounds = Array.isArray(level.rounds) ? level.rounds : [];
-        rounds.forEach((round, roundIndex) => {
-            const entry = ensureEntry(levelId, round && round.background);
+        const scenes = Array.isArray(level.scenes) ? level.scenes : [];
+        scenes.forEach((scene, sceneIndex) => {
+            const entry = ensureEntry(levelId, scene && scene.background);
             if (!entry) return;
             entry.usedBy.push({
                 levelId,
-                round: roundIndex + 1
+                scene: sceneIndex + 1
             });
-            if (round && String(round.backgroundImageName || "").trim()) {
-                entry.backgroundImageName = String(round.backgroundImageName).trim();
+            if (scene && String(scene.backgroundImageName || "").trim()) {
+                entry.backgroundImageName = String(scene.backgroundImageName).trim();
             }
         });
     });
@@ -1485,12 +1219,12 @@ function replaceBackgroundPathInLevels(levels, oldBackgroundPath, newBackgroundP
                 : normalizeProjectRelativeFilePath(backgroundPath)
         ));
         level.backgroundImages = Array.from(new Set(level.backgroundImages.filter(Boolean)));
-        const rounds = Array.isArray(level.rounds) ? level.rounds : [];
-        rounds.forEach(round => {
-            if (!round || typeof round !== "object") return;
-            if (normalizeProjectRelativeFilePath(round.background) === normalizedOldPath) {
-                round.background = normalizedNewPath;
-                if (nextName) round.backgroundImageName = nextName;
+        const scenes = Array.isArray(level.scenes) ? level.scenes : [];
+        scenes.forEach(scene => {
+            if (!scene || typeof scene !== "object") return;
+            if (normalizeProjectRelativeFilePath(scene.background) === normalizedOldPath) {
+                scene.background = normalizedNewPath;
+                if (nextName) scene.backgroundImageName = nextName;
             }
         });
     });
@@ -1522,8 +1256,7 @@ async function readEnemyTypeData() {
     const fallback = {
         enemyTypeOptions: ["monster", "warrior", "mage", "archer", "rogue", "paladin", "spirit", "hunter"],
         enemySizeToPx: { s: 150, m: 220, l: 300, xl: 400, "2xl": 600 },
-        enemySizeOptions: ["s", "m", "l", "xl", "2xl"],
-        enemyLevelOptions: ["all", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+        enemySizeOptions: ["s", "m", "l", "xl", "2xl"]
     };
 
     try {
@@ -1531,18 +1264,13 @@ async function readEnemyTypeData() {
         const enemyTypeOptions = parseExportLiteral(content, "ENEMY_TYPE_OPTIONS");
         const enemySizeToPx = parseExportLiteral(content, "ENEMY_SIZE_TO_PX");
         const rawEnemySizeOptions = parseExportLiteral(content, "ENEMY_SIZE_OPTIONS");
-        const rawEnemyLevelOptions = parseExportLiteral(content, "ENEMY_LEVEL_OPTIONS");
         const enemySizeOptions = Array.isArray(rawEnemySizeOptions)
             ? rawEnemySizeOptions
             : Object.keys(enemySizeToPx);
-        const enemyLevelOptions = Array.isArray(rawEnemyLevelOptions)
-            ? rawEnemyLevelOptions
-            : fallback.enemyLevelOptions;
         return {
             enemyTypeOptions: Array.isArray(enemyTypeOptions) ? enemyTypeOptions : fallback.enemyTypeOptions,
             enemySizeToPx: enemySizeToPx && typeof enemySizeToPx === "object" ? enemySizeToPx : fallback.enemySizeToPx,
-            enemySizeOptions: Array.isArray(enemySizeOptions) ? enemySizeOptions : fallback.enemySizeOptions,
-            enemyLevelOptions: Array.isArray(enemyLevelOptions) ? enemyLevelOptions : fallback.enemyLevelOptions
+            enemySizeOptions: Array.isArray(enemySizeOptions) ? enemySizeOptions : fallback.enemySizeOptions
         };
     } catch (error) {
         return fallback;
@@ -1609,28 +1337,17 @@ function normalizeEnemyPayload(enemyId, payload, existing = null, metadata = nul
 
     FIELD_ORDER.forEach(key => {
         if (!(key in merged)) return;
-        if (key === "levels") return;
-        if (["hp", "atk", "def", "crit", "dodge", "aim", "exp"].includes(key)) {
+        if (["hp", "atk", "def", "crit", "dodge", "aim", "essence"].includes(key)) {
             const parsed = Number(merged[key]);
             normalized[key] = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
             return;
         }
+        if (key === "canAttack") {
+            normalized[key] = Boolean(merged[key]);
+            return;
+        }
         normalized[key] = String(merged[key] ?? "");
     });
-
-    const levelOptions = metadata && Array.isArray(metadata.enemyLevelOptions)
-        ? metadata.enemyLevelOptions
-        : ["all"];
-    const rawLevels = Array.isArray(merged.levels) ? merged.levels : [merged.levels];
-    const normalizedLevels = rawLevels
-        .map(entry => (typeof entry === "number" ? entry : String(entry || "").trim()))
-        .filter(entry => entry !== "" && entry !== null && entry !== undefined)
-        .map(entry => (entry === "all" ? "all" : Number(entry)))
-        .filter(entry => entry === "all" || Number.isFinite(entry));
-    const dedupedLevels = Array.from(new Set(normalizedLevels));
-    const validLevels = dedupedLevels.filter(entry => levelOptions.includes(entry));
-    if (validLevels.includes("all")) normalized.levels = ["all"];
-    else normalized.levels = validLevels.length > 0 ? validLevels : ["all"];
 
     if (metadata && Array.isArray(metadata.enemyTypeOptions) && metadata.enemyTypeOptions.length > 0) {
         if (!metadata.enemyTypeOptions.includes(normalized.type)) {
@@ -1723,6 +1440,523 @@ async function readRequestBody(req) {
         return JSON.parse(raw);
     } catch (error) {
         throw new Error("Invalid JSON body.");
+    }
+}
+
+function normalizeEventRegistryEntry(input, existing = null) {
+    const source = input && typeof input === "object" ? input : {};
+    const base = existing && typeof existing === "object" ? existing : {};
+    const eventName = String(source.eventName || base.eventName || "").trim();
+    const fallbackId = eventName.replace(/[^a-zA-Z0-9]+/g, "_").toLowerCase().replace(/^_+|_+$/g, "");
+    const id = sanitizeId(source.id || base.id || fallbackId || source.name || "event");
+    const name = String(source.name || base.name || id.toUpperCase()).trim();
+    const scopeRaw = String(source.scope || base.scope || "custom").trim().toLowerCase();
+    const scope = scopeRaw || "custom";
+    const description = String(source.description || base.description || "").trim();
+    const core = Boolean(base.core);
+    return { id, name, eventName, scope, description, core };
+}
+
+async function ensureEventRegistryFile() {
+    const dirPath = path.dirname(EVENT_REGISTRY_FILE);
+    await fsp.mkdir(dirPath, { recursive: true });
+    if (!fs.existsSync(EVENT_REGISTRY_FILE)) {
+        await fsp.writeFile(EVENT_REGISTRY_FILE, `${JSON.stringify(DEFAULT_EVENT_REGISTRY, null, 2)}\n`, "utf8");
+    }
+}
+
+async function readEventRegistry() {
+    await ensureEventRegistryFile();
+    const raw = await fsp.readFile(EVENT_REGISTRY_FILE, "utf8");
+    let parsed = {};
+    try {
+        parsed = JSON.parse(raw);
+    } catch (_) {
+        parsed = {};
+    }
+    const events = Array.isArray(parsed.events) ? parsed.events : [];
+    const normalized = [];
+    const seenIds = new Set();
+    for (const entry of events) {
+        const next = normalizeEventRegistryEntry(entry);
+        if (!next.id || !next.eventName) continue;
+        if (seenIds.has(next.id)) continue;
+        seenIds.add(next.id);
+        next.core = Boolean(entry && entry.core);
+        normalized.push(next);
+    }
+    if (normalized.length === 0) {
+        return DEFAULT_EVENT_REGISTRY.events.map(entry => ({ ...entry }));
+    }
+    const seenEventNames = new Set(normalized.map(entry => String(entry.eventName || "").trim()));
+    DEFAULT_EVENT_REGISTRY.events.forEach(coreEntry => {
+        const coreEventName = String(coreEntry.eventName || "").trim();
+        if (!coreEventName || seenEventNames.has(coreEventName)) return;
+        normalized.push({ ...coreEntry });
+        seenEventNames.add(coreEventName);
+    });
+    return normalized;
+}
+
+async function writeEventRegistry(events) {
+    const payload = {
+        events: events.map(entry => ({
+            id: String(entry.id || "").trim(),
+            name: String(entry.name || "").trim(),
+            eventName: String(entry.eventName || "").trim(),
+            scope: String(entry.scope || "custom").trim(),
+            description: String(entry.description || "").trim(),
+            core: Boolean(entry.core)
+        }))
+    };
+    await ensureEventRegistryFile();
+    await fsp.writeFile(EVENT_REGISTRY_FILE, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
+
+function toSkillConstName(skillId, skillType) {
+    const safe = sanitizeId(skillId || "skill").toUpperCase();
+    const prefix = skillType === "active"
+        ? "A"
+        : (skillType === "buff" ? "B" : (skillType === "debuff" ? "D" : "P"));
+    return `${prefix}_${safe}`;
+}
+
+function toSkillClassName(skillId, skillType) {
+    const safe = sanitizeId(skillId || "skill");
+    const prefix = skillType === "active"
+        ? "a_"
+        : (skillType === "buff" ? "b_" : (skillType === "debuff" ? "d_" : "p_"));
+    return `${prefix}${safe}`;
+}
+
+function getSkillFilePath(skillType, skillId) {
+    const safeId = sanitizeId(skillId);
+    if (!safeId) return "";
+    const root = skillType === "active" ? ACTIVE_SKILL_ROOT : PASSIVE_SKILL_ROOT;
+    const filePrefix = skillType === "active"
+        ? "a"
+        : (skillType === "buff" ? "b" : (skillType === "debuff" ? "d" : "p"));
+    return path.join(root, `${filePrefix}_${safeId}.js`);
+}
+
+function getUniqueSkillId(baseId, skillType, existingSkills = []) {
+    const sanitizedBase = sanitizeId(baseId) || "skill";
+    const used = new Set(
+        (Array.isArray(existingSkills) ? existingSkills : [])
+            .filter(entry => entry && entry.skillType === skillType)
+            .map(entry => sanitizeId(entry.id))
+            .filter(Boolean)
+    );
+    let candidate = sanitizedBase;
+    let index = 1;
+    while (used.has(candidate)) {
+        index += 1;
+        candidate = `${sanitizedBase}_${index}`;
+    }
+    return candidate;
+}
+
+async function ensureSkillStores() {
+    await fsp.mkdir(PASSIVE_SKILL_ROOT, { recursive: true });
+    await fsp.mkdir(ACTIVE_SKILL_ROOT, { recursive: true });
+    const passiveSkillRecordFile = path.join(PASSIVE_SKILL_ROOT, "passiveSkillRecord.js");
+    const buffSkillRecordFile = path.join(PASSIVE_SKILL_ROOT, "buffSkillRecord.js");
+    const debuffSkillRecordFile = path.join(PASSIVE_SKILL_ROOT, "debuffSkillRecord.js");
+    if (fs.existsSync(passiveSkillRecordFile)) {
+        if (!fs.existsSync(buffSkillRecordFile)) {
+            const buffContent = [
+                "import { PassiveSkillRecord } from \"./passiveSkillRecord.js\";",
+                "",
+                "export class BuffSkillRecord extends PassiveSkillRecord {",
+                "    constructor(config = {}) {",
+                "        super(config);",
+                "        this.skillType = \"buff\";",
+                "    }",
+                "}",
+                ""
+            ].join("\n");
+            await fsp.writeFile(buffSkillRecordFile, buffContent, "utf8");
+        }
+        if (!fs.existsSync(debuffSkillRecordFile)) {
+            const debuffContent = [
+                "import { PassiveSkillRecord } from \"./passiveSkillRecord.js\";",
+                "",
+                "export class DebuffSkillRecord extends PassiveSkillRecord {",
+                "    constructor(config = {}) {",
+                "        super(config);",
+                "        this.skillType = \"debuff\";",
+                "    }",
+                "}",
+                ""
+            ].join("\n");
+            await fsp.writeFile(debuffSkillRecordFile, debuffContent, "utf8");
+        }
+    }
+    const activeSkillRecordFile = path.join(ACTIVE_SKILL_ROOT, "activeSkillRecord.js");
+    if (!fs.existsSync(activeSkillRecordFile)) {
+        const content = [
+            "import { Skill } from \"../skill.js\";",
+            "",
+            "export class ActiveSkillRecord extends Skill {",
+            "    constructor(config = {}) {",
+            "        super(config);",
+            "        Object.assign(this, config);",
+            "        this.skillType = \"active\";",
+            "    }",
+            "}",
+            ""
+        ].join("\n");
+        await fsp.writeFile(activeSkillRecordFile, content, "utf8");
+    }
+}
+
+function parseLiteralObjectFromCode(content) {
+    const match = String(content || "").match(/super\(\s*({[\s\S]*?})\s*\)\s*;/);
+    if (!match || !match[1]) return null;
+    try {
+        return Function(`"use strict"; return (${match[1]});`)();
+    } catch (_) {
+        return null;
+    }
+}
+
+function normalizeSkillRecord(input, typeHint = "passive", existing = null) {
+    const source = input && typeof input === "object" ? input : {};
+    const base = existing && typeof existing === "object" ? existing : {};
+    const skillType = SKILL_TYPE_OPTIONS.includes(String(source.skillType || base.skillType || typeHint).trim().toLowerCase())
+        ? String(source.skillType || base.skillType || typeHint).trim().toLowerCase()
+        : typeHint;
+    const id = sanitizeId(source.id || base.id || source.name || "skill");
+    const sourceTrigger = source.trigger && typeof source.trigger === "object" ? source.trigger : {};
+    const baseTrigger = base.trigger && typeof base.trigger === "object" ? base.trigger : {};
+    const eventName = String(source.triggerEvent || sourceTrigger.event || baseTrigger.event || "").trim();
+    const trigger = {
+        ...baseTrigger,
+        ...sourceTrigger
+    };
+    if (eventName) trigger.event = eventName;
+    else if (Object.prototype.hasOwnProperty.call(trigger, "event")) delete trigger.event;
+    const effectTypes = Array.isArray(source.effectTypes)
+        ? source.effectTypes
+        : String(source.effectTypes || "").split(",").map(entry => entry.trim()).filter(Boolean);
+    const levelData = Array.isArray(source.levelData) ? source.levelData : (Array.isArray(base.levelData) ? base.levelData : []);
+    const effects = Array.isArray(source.effects)
+        ? source.effects
+            .filter(entry => entry && typeof entry === "object")
+            .map(entry => {
+                const next = { ...entry };
+                if (Object.prototype.hasOwnProperty.call(next, "once")) delete next.once;
+                return next;
+            })
+        : (Array.isArray(base.effects)
+            ? base.effects
+                .filter(entry => entry && typeof entry === "object")
+                .map(entry => {
+                    const next = { ...entry };
+                    if (Object.prototype.hasOwnProperty.call(next, "once")) delete next.once;
+                    return next;
+                })
+            : []);
+    const scaling = Array.isArray(source.scaling)
+        ? source.scaling.filter(entry => entry && typeof entry === "object").map(entry => ({ ...entry }))
+        : (Array.isArray(base.scaling) ? base.scaling.filter(entry => entry && typeof entry === "object").map(entry => ({ ...entry })) : []);
+    const maxRank = Math.max(1, Number.parseInt(source.maxRank ?? base.maxRank ?? ((base.meta && base.meta.maxRank) || 1), 10) || 1);
+    const normalizedRecord = {
+        id,
+        name: String(source.name || base.name || id).trim(),
+        desc: String(source.desc || base.desc || "").trim(),
+        kind: String(source.kind || base.kind || "skill").trim(),
+        skillType,
+        effectTypes: effectTypes.length > 0 ? effectTypes : ["generic"],
+        durationTurns: Number.parseInt(source.durationTurns ?? base.durationTurns ?? 0, 10) || 0,
+        target: String(source.target || base.target || "enemy").trim(),
+        section: Number.parseInt(source.section ?? base.section ?? 1, 10) || 1,
+        maxRank,
+        implemented: Boolean(source.implemented ?? base.implemented ?? false),
+        levelData,
+        image: String(source.image || base.image || "").trim(),
+        trigger,
+        effects,
+        scaling,
+        modifiers: source.modifiers && typeof source.modifiers === "object"
+            ? source.modifiers
+            : (base.modifiers && typeof base.modifiers === "object" ? base.modifiers : {}),
+        meta: { ...(base.meta && typeof base.meta === "object" ? base.meta : {}), maxRank }
+    };
+    return withLegacySkillEffects(normalizedRecord);
+}
+
+function withLegacySkillEffects(record) {
+    if (!record || typeof record !== "object") return record;
+    if (Array.isArray(record.effects) && record.effects.length > 0) return record;
+    const next = { ...record };
+    if (next.id === "hidden_snare") {
+        next.effects = [{
+            type: "counter_threshold_flag",
+            onEvent: "ENEMY_HIT",
+            sourceEquals: "basic_attack",
+            counterKey: "attackHitsForTrap",
+            step: 1,
+            thresholdFromModifier: "requiredHits",
+            threshold: Number(next.trigger && next.trigger.requiredHits) || 5,
+            resetTo: 0,
+            readyFlagKey: "trapReady",
+            readyFlagValue: true,
+            floatText: "Trap ready",
+            floatTextTarget: "player",
+            floatTextKind: "info"
+        }];
+        return next;
+    }
+    if (next.id === "evasive_instinct" || next.id === "ghost_walker") {
+        next.effects = [{
+            type: "set_turns_on_event",
+            onEvent: "PLAYER_DODGE",
+            stateKey: "skillTreeDodgeBuffTurns",
+            turnsFromModifier: "dodgeBuffTurns",
+            turns: 2
+        }];
+        return next;
+    }
+    if (next.id === "opportunistic_trap") {
+        next.effects = [{
+            type: "arm_flag_if_flag",
+            onEvent: "PLAYER_DODGE",
+            requiredFlagKey: "trapReady",
+            minRank: 2,
+            flagKey: "trapCritArmed",
+            flagValue: true
+        }];
+        return next;
+    }
+    return next;
+}
+
+function validateSkillRecordOrThrow(record) {
+    if (!record || typeof record !== "object") throw new Error("Invalid skill payload.");
+    if (!SKILL_TYPE_OPTIONS.includes(String(record.skillType || "").trim().toLowerCase())) {
+        throw new Error("Invalid skillType.");
+    }
+    if (!String(record.name || "").trim()) throw new Error("Skill name is required.");
+    if (!String(record.id || "").trim()) throw new Error("Skill id is required.");
+
+    const isPassiveLike = record.skillType === "passive" || record.skillType === "buff" || record.skillType === "debuff";
+    if (!isPassiveLike) return;
+
+    const trigger = record.trigger && typeof record.trigger === "object" ? record.trigger : {};
+    const autoApplied = Boolean(trigger.autoApplied);
+    const triggerEvent = String(trigger.event || "").trim();
+    if (!autoApplied && !triggerEvent) {
+        throw new Error("Passive skills require a trigger event when auto applied is off.");
+    }
+
+    const effects = Array.isArray(record.effects) ? record.effects : [];
+    if (effects.length <= 0) return;
+    for (const effect of effects) {
+        const type = String(effect && effect.type || "").trim().toLowerCase();
+        if (!type) throw new Error("Passive effect type is required.");
+        if (!SUPPORTED_PASSIVE_EFFECT_TYPES.has(type)) {
+            throw new Error(`Unsupported passive effect type '${type}'.`);
+        }
+        const valueType = String(effect && effect.valueType || "int").trim().toLowerCase();
+        if (valueType !== "int" && valueType !== "%") {
+            throw new Error("Effect value type must be 'int' or '%'.");
+        }
+        const chance = Number(effect && effect.chance);
+        if (Number.isFinite(chance) && (chance < 0 || chance > 100)) {
+            throw new Error("Effect chance must be between 0 and 100.");
+        }
+    }
+}
+
+async function readSkillRecordFile(filePath, skillType) {
+    const content = await fsp.readFile(filePath, "utf8");
+    const parsed = parseLiteralObjectFromCode(content);
+    if (!parsed || typeof parsed !== "object") return null;
+    const normalized = normalizeSkillRecord(parsed, skillType, parsed);
+    if (!normalized.id) return null;
+    normalized.__filePath = filePath;
+    return normalized;
+}
+
+function inferPassiveLikeSkillTypeFromFileName(fileName) {
+    const raw = String(fileName || "").trim().toLowerCase();
+    if (raw.startsWith("b_")) return "buff";
+    if (raw.startsWith("d_")) return "debuff";
+    return "passive";
+}
+
+async function loadSkillsByType(skillType) {
+    await ensureSkillStores();
+    const root = skillType === "active" ? ACTIVE_SKILL_ROOT : PASSIVE_SKILL_ROOT;
+    const entries = await fsp.readdir(root, { withFileTypes: true });
+    const records = [];
+    for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        if (path.extname(entry.name).toLowerCase() !== ".js") continue;
+        if (entry.name === "index.js") continue;
+        if (entry.name === "passiveSkillRecord.js" || entry.name === "buffSkillRecord.js" || entry.name === "debuffSkillRecord.js" || entry.name === "activeSkillRecord.js") continue;
+        const typeHint = root === ACTIVE_SKILL_ROOT
+            ? "active"
+            : inferPassiveLikeSkillTypeFromFileName(entry.name);
+        const record = await readSkillRecordFile(path.join(root, entry.name), typeHint);
+        if (record) records.push(record);
+    }
+    if (skillType === "active") {
+        return records.filter(entry => entry && entry.skillType === "active");
+    }
+    if (skillType === "buff") {
+        return records.filter(entry => entry && entry.skillType === "buff");
+    }
+    if (skillType === "debuff") {
+        return records.filter(entry => entry && entry.skillType === "debuff");
+    }
+    if (skillType === "passive") {
+        return records.filter(entry => entry && (entry.skillType === "passive" || entry.skillType === "buff" || entry.skillType === "debuff"));
+    }
+    return records;
+}
+
+async function loadAllSkills() {
+    const [passiveLike, active] = await Promise.all([
+        loadSkillsByType("passive"),
+        loadSkillsByType("active")
+    ]);
+    return [...passiveLike, ...active];
+}
+
+async function listSkillIconPaths() {
+    if (!fs.existsSync(SKILL_ICON_ROOT)) return [];
+    const entries = await fsp.readdir(SKILL_ICON_ROOT, { withFileTypes: true });
+    const icons = entries
+        .filter(entry => entry.isFile())
+        .filter(entry => ALLOWED_IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
+        .map(entry => `/${path.posix.join("api", "skill-icons", encodeURIComponent(entry.name))}`);
+    icons.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    return icons;
+}
+
+function formatSkillFileContent(record) {
+    const skillType = record.skillType === "active"
+        ? "active"
+        : (record.skillType === "buff" ? "buff" : (record.skillType === "debuff" ? "debuff" : "passive"));
+    const className = toSkillClassName(record.id, skillType);
+    const constName = toSkillConstName(record.id, skillType);
+    const baseImport = "Skill";
+    const importPath = "../skill.js";
+    const payload = {
+        id: record.id,
+        name: record.name,
+        desc: record.desc,
+        skillType,
+        kind: record.kind,
+        effectTypes: Array.isArray(record.effectTypes) ? record.effectTypes : ["generic"],
+        durationTurns: Number(record.durationTurns) || 0,
+        target: record.target,
+        section: Number(record.section) || 0,
+        maxRank: Number(record.maxRank) || 1,
+        implemented: Boolean(record.implemented),
+        levelData: Array.isArray(record.levelData) ? record.levelData : [],
+        image: record.image || "",
+        trigger: record.trigger && Object.keys(record.trigger).length > 0 ? record.trigger : undefined,
+        effects: Array.isArray(record.effects) && record.effects.length > 0 ? record.effects : undefined,
+        scaling: Array.isArray(record.scaling) && record.scaling.length > 0 ? record.scaling : undefined,
+        modifiers: record.modifiers && Object.keys(record.modifiers).length > 0 ? record.modifiers : undefined,
+        meta: { ...(record.meta || {}), maxRank: Number(record.maxRank) || 1 }
+    };
+    const clean = Object.fromEntries(Object.entries(payload).filter(([, value]) => typeof value !== "undefined"));
+    return [
+        `import { ${baseImport} } from "${importPath}";`,
+        "",
+        `export class ${className} extends ${baseImport} {`,
+        "    constructor() {",
+        `        super(${JSON.stringify(clean, null, 12).split("\n").join("\n        ")});`,
+        "    }",
+        "}",
+        "",
+        `export const ${constName} = new ${className}();`,
+        ""
+    ].join("\n");
+}
+
+async function writeSkillRecord(record) {
+    const filePath = getSkillFilePath(record.skillType, record.id);
+    if (!filePath) throw new Error("Invalid skill id.");
+    await ensureSkillStores();
+    await fsp.writeFile(filePath, formatSkillFileContent(record), "utf8");
+    return filePath;
+}
+
+async function refreshSkillIndex(skillType) {
+    const isPassiveLikeType = skillType === "passive" || skillType === "buff" || skillType === "debuff";
+    const records = await loadSkillsByType(isPassiveLikeType ? "passive" : skillType);
+    records.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const lines = [];
+    if (isPassiveLikeType) {
+        records.forEach(skill => {
+            const id = sanitizeId(skill.id);
+            const skillTypeForFile = skill && skill.skillType ? String(skill.skillType) : "passive";
+            const filePrefix = skillTypeForFile === "buff" ? "b" : (skillTypeForFile === "debuff" ? "d" : "p");
+            const fileBase = `${filePrefix}_${id}`;
+            const constName = toSkillConstName(id, skillTypeForFile);
+            const className = toSkillClassName(id, skillTypeForFile);
+            const aliasName = `${id.toUpperCase()}_SKILL`;
+            lines.push(`export { ${constName}, ${className} } from "./${fileBase}.js";`);
+            lines.push(`export { ${constName} as ${aliasName} } from "./${fileBase}.js";`);
+        });
+    } else {
+        records.forEach(skill => {
+            const id = sanitizeId(skill.id);
+            const fileBase = `a_${id}`;
+            const constName = toSkillConstName(id, "active");
+            const className = toSkillClassName(id, "active");
+            lines.push(`export { ${constName}, ${className} } from "./${fileBase}.js";`);
+        });
+    }
+    const root = skillType === "active" ? ACTIVE_SKILL_ROOT : PASSIVE_SKILL_ROOT;
+    await fsp.writeFile(path.join(root, "index.js"), `${lines.join("\n")}\n`, "utf8");
+}
+
+function sendJson(res, statusCode, payload) {
+    if (!res || res.writableEnded) return;
+    const body = JSON.stringify(payload ?? {});
+    res.writeHead(statusCode, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Length": Buffer.byteLength(body)
+    });
+    res.end(body);
+}
+
+function sendText(res, statusCode, text) {
+    if (!res || res.writableEnded) return;
+    const body = String(text ?? "");
+    res.writeHead(statusCode, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Length": Buffer.byteLength(body)
+    });
+    res.end(body);
+}
+
+function getContentTypeByExt(ext) {
+    const normalized = String(ext || "").toLowerCase();
+    switch (normalized) {
+    case ".html": return "text/html; charset=utf-8";
+    case ".js": return "application/javascript; charset=utf-8";
+    case ".css": return "text/css; charset=utf-8";
+    case ".json": return "application/json; charset=utf-8";
+    case ".png": return "image/png";
+    case ".jpg":
+    case ".jpeg": return "image/jpeg";
+    case ".gif": return "image/gif";
+    case ".webp": return "image/webp";
+    case ".svg": return "image/svg+xml";
+    case ".mp3": return "audio/mpeg";
+    case ".wav": return "audio/wav";
+    case ".ogg": return "audio/ogg";
+    case ".mp4": return "video/mp4";
+    case ".webm": return "video/webm";
+    case ".txt": return "text/plain; charset=utf-8";
+    default: return "application/octet-stream";
     }
 }
 
@@ -1909,6 +2143,198 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
+        if (req.method === "GET" && pathname === "/api/events") {
+            const events = await readEventRegistry();
+            sendJson(res, 200, { events });
+            return;
+        }
+
+        if (req.method === "GET" && pathname === "/api/skill-icons") {
+            const icons = await listSkillIconPaths();
+            sendJson(res, 200, { icons });
+            return;
+        }
+
+        if (req.method === "GET" && /^\/api\/skill-icons\/[^/]+$/.test(pathname)) {
+            const fileName = decodeURIComponent(String(pathname.split("/").pop() || ""));
+            const normalizedName = path.basename(fileName);
+            const filePath = path.join(SKILL_ICON_ROOT, normalizedName);
+            if (!filePath.startsWith(SKILL_ICON_ROOT)) return sendText(res, 403, "Forbidden");
+            if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) return sendText(res, 404, "Not Found");
+            const ext = path.extname(filePath).toLowerCase();
+            if (!ALLOWED_IMAGE_EXTENSIONS.has(ext)) return sendText(res, 415, "Unsupported Media Type");
+            const content = await fsp.readFile(filePath);
+            res.writeHead(200, {
+                "Content-Type": getContentTypeByExt(ext),
+                "Content-Length": content.length,
+                "Cache-Control": "no-store"
+            });
+            res.end(content);
+            return;
+        }
+
+        if (req.method === "GET" && pathname === "/api/skills") {
+            const [skills, events] = await Promise.all([
+                loadAllSkills(),
+                readEventRegistry()
+            ]);
+            sendJson(res, 200, {
+                skills,
+                metadata: {
+                    skillTypeOptions: SKILL_TYPE_OPTIONS,
+                    targetOptions: SKILL_TARGET_OPTIONS,
+                    modeOptions: SKILL_MODE_OPTIONS,
+                    triggerEventOptions: events.map(entry => String(entry.eventName || "").trim()).filter(Boolean)
+                }
+            });
+            return;
+        }
+
+        if (req.method === "POST" && pathname === "/api/skills") {
+            const payload = await readRequestBody(req);
+            const skillType = String(payload && payload.skillType || "passive").trim().toLowerCase();
+            if (!SKILL_TYPE_OPTIONS.includes(skillType)) return sendJson(res, 400, { error: "Invalid skillType." });
+            const existing = await loadAllSkills();
+            const next = normalizeSkillRecord(payload, skillType, null);
+            const baseId = sanitizeId(payload && (payload.name || payload.id) || next.name || "skill");
+            next.id = getUniqueSkillId(baseId, skillType, existing);
+            if (!next.name) next.name = next.id;
+            try {
+                validateSkillRecordOrThrow(next);
+            } catch (error) {
+                return sendJson(res, 400, { error: error.message || "Invalid skill payload." });
+            }
+            const filePath = await writeSkillRecord(next);
+            await refreshSkillIndex(skillType);
+            sendJson(res, 201, {
+                ok: true,
+                skill: { ...next, __filePath: path.relative(PROJECT_ROOT, filePath).replace(/\\/g, "/") }
+            });
+            return;
+        }
+
+        if (req.method === "PUT" && /^\/api\/skills\/(passive|buff|debuff|active)\/[^/]+$/.test(pathname)) {
+            const match = pathname.match(/^\/api\/skills\/(passive|buff|debuff|active)\/([^/]+)$/);
+            const skillType = String(match && match[1] || "").trim().toLowerCase();
+            const id = sanitizeId(decodeURIComponent(match && match[2] || ""));
+            if (!id || !SKILL_TYPE_OPTIONS.includes(skillType)) return sendJson(res, 400, { error: "Invalid skill path." });
+            const payload = await readRequestBody(req);
+            const list = await loadSkillsByType(skillType);
+            const found = list.find(entry => entry.id === id);
+            if (!found) return sendJson(res, 404, { error: `Skill '${id}' not found.` });
+            const requestedType = SKILL_TYPE_OPTIONS.includes(String(payload && payload.skillType || "").trim().toLowerCase())
+                ? String(payload.skillType).trim().toLowerCase()
+                : skillType;
+            const next = normalizeSkillRecord({ ...found, ...payload, skillType: requestedType }, requestedType, found);
+            if (!next.id) return sendJson(res, 400, { error: "Invalid skill id." });
+            const targetList = requestedType === skillType ? list : await loadSkillsByType(requestedType);
+            if ((next.id !== id || requestedType !== skillType) && targetList.some(entry => entry.id === next.id)) {
+                return sendJson(res, 409, { error: `Skill '${next.id}' already exists in ${requestedType}.` });
+            }
+            try {
+                validateSkillRecordOrThrow(next);
+            } catch (error) {
+                return sendJson(res, 400, { error: error.message || "Invalid skill payload." });
+            }
+            const oldPath = getSkillFilePath(skillType, id);
+            const movedType = requestedType !== skillType;
+            if ((next.id !== id || movedType) && oldPath && fs.existsSync(oldPath)) {
+                await fsp.unlink(oldPath).catch(() => {});
+            }
+            const filePath = await writeSkillRecord(next);
+            if (movedType) {
+                await Promise.all([
+                    refreshSkillIndex(skillType),
+                    refreshSkillIndex(requestedType)
+                ]);
+            } else {
+                await refreshSkillIndex(skillType);
+            }
+            sendJson(res, 200, {
+                ok: true,
+                renamed: next.id !== id,
+                movedType,
+                oldType: skillType,
+                skillType: requestedType,
+                oldId: id,
+                skill: { ...next, __filePath: path.relative(PROJECT_ROOT, filePath).replace(/\\/g, "/") }
+            });
+            return;
+        }
+
+        if (req.method === "DELETE" && /^\/api\/skills\/(passive|buff|debuff|active)\/[^/]+$/.test(pathname)) {
+            const match = pathname.match(/^\/api\/skills\/(passive|buff|debuff|active)\/([^/]+)$/);
+            const skillType = String(match && match[1] || "").trim().toLowerCase();
+            const id = sanitizeId(decodeURIComponent(match && match[2] || ""));
+            if (!id || !SKILL_TYPE_OPTIONS.includes(skillType)) return sendJson(res, 400, { error: "Invalid skill path." });
+            const list = await loadSkillsByType(skillType);
+            const found = list.find(entry => entry.id === id);
+            if (!found) return sendJson(res, 404, { error: `Skill '${id}' not found.` });
+            const filePath = getSkillFilePath(skillType, id);
+            if (filePath && fs.existsSync(filePath)) {
+                await fsp.unlink(filePath);
+            }
+            await refreshSkillIndex(skillType);
+            sendJson(res, 200, { ok: true, id, skillType, deleted: true });
+            return;
+        }
+
+        if (req.method === "POST" && pathname === "/api/events") {
+            const payload = await readRequestBody(req);
+            const events = await readEventRegistry();
+            const next = normalizeEventRegistryEntry(payload, null);
+            if (!next.id) return sendJson(res, 400, { error: "Invalid event id." });
+            if (!next.eventName) return sendJson(res, 400, { error: "Event name is required." });
+            if (events.some(entry => entry.id === next.id)) {
+                return sendJson(res, 409, { error: `Event id '${next.id}' already exists.` });
+            }
+            if (events.some(entry => entry.eventName === next.eventName)) {
+                return sendJson(res, 409, { error: `Event name '${next.eventName}' already exists.` });
+            }
+            next.core = false;
+            events.push(next);
+            await writeEventRegistry(events);
+            sendJson(res, 201, { ok: true, event: next });
+            return;
+        }
+
+        if (req.method === "PUT" && /^\/api\/events\/[^/]+$/.test(pathname)) {
+            const id = sanitizeId(decodeURIComponent(pathname.replace("/api/events/", "")));
+            if (!id) return sendJson(res, 400, { error: "Invalid event id." });
+            const payload = await readRequestBody(req);
+            const events = await readEventRegistry();
+            const index = events.findIndex(entry => entry.id === id);
+            if (index < 0) return sendJson(res, 404, { error: `Event '${id}' not found.` });
+            const current = events[index];
+            if (current.core) return sendJson(res, 403, { error: "Core events are read-only." });
+            const requestedId = sanitizeId(payload && payload.id || id) || id;
+            const next = normalizeEventRegistryEntry({ ...current, ...payload, id: requestedId }, current);
+            if (!next.eventName) return sendJson(res, 400, { error: "Event name is required." });
+            if (events.some((entry, i) => i !== index && entry.id === next.id)) {
+                return sendJson(res, 409, { error: `Event id '${next.id}' already exists.` });
+            }
+            if (events.some((entry, i) => i !== index && entry.eventName === next.eventName)) {
+                return sendJson(res, 409, { error: `Event name '${next.eventName}' already exists.` });
+            }
+            events[index] = { ...next, core: false };
+            await writeEventRegistry(events);
+            sendJson(res, 200, { ok: true, event: events[index], oldId: id, renamed: id !== next.id });
+            return;
+        }
+
+        if (req.method === "DELETE" && /^\/api\/events\/[^/]+$/.test(pathname)) {
+            const id = sanitizeId(decodeURIComponent(pathname.replace("/api/events/", "")));
+            if (!id) return sendJson(res, 400, { error: "Invalid event id." });
+            const events = await readEventRegistry();
+            const index = events.findIndex(entry => entry.id === id);
+            if (index < 0) return sendJson(res, 404, { error: `Event '${id}' not found.` });
+            if (events[index].core) return sendJson(res, 403, { error: "Core events cannot be deleted." });
+            events.splice(index, 1);
+            await writeEventRegistry(events);
+            sendJson(res, 200, { ok: true, id, deleted: true });
+            return;
+        }
+
         if (req.method === "GET" && pathname === "/api/player/wanderer") {
             const data = readWandererClassData();
             return sendJson(res, 200, { playerClass: data });
@@ -1926,7 +2352,7 @@ const server = http.createServer(async (req, res) => {
             const payload = await readRequestBody(req);
             const target = resolvePlayerImageUploadTarget(payload && payload.target);
             if (!target) return sendJson(res, 400, { error: "Invalid image target." });
-            if (!configureTinifyIfNeeded()) {
+            if (!tinyPngApi.isEnabled()) {
                 return sendJson(res, 400, { error: "TinyPNG API key is required for player image upload." });
             }
 
@@ -1943,7 +2369,7 @@ const server = http.createServer(async (req, res) => {
             const fileName = `${target.fileBase}${extension}`;
             const targetPath = path.join(target.dir, fileName);
             const binary = Buffer.from(dataBase64, "base64");
-            const compressedResult = await compressImageWithTinify(binary, extension);
+            const compressedResult = await tinyPngApi.compressImageWithTinify(binary, extension);
             if (!compressedResult || compressedResult.reason === "missing_api_key") {
                 return sendJson(res, 400, { error: "TinyPNG compression failed: missing API key." });
             }
@@ -1966,7 +2392,7 @@ const server = http.createServer(async (req, res) => {
                 image: nextRelative,
                 imageSizeBytes: compressedResult.buffer.length,
                 compression: {
-                    enabled: Boolean(TINIFY_API_KEY),
+                    enabled: tinyPngApi.isEnabled(),
                     compressed: compressedResult.compressed,
                     reason: compressedResult.reason,
                     originalBytes: binary.length,
@@ -2113,7 +2539,7 @@ const server = http.createServer(async (req, res) => {
             }
 
             const binary = Buffer.from(dataBase64, "base64");
-            const compressedResult = await compressImageWithTinify(binary, extension);
+            const compressedResult = await tinyPngApi.compressImageWithTinify(binary, extension);
             await fsp.writeFile(targetPath, compressedResult.buffer);
 
             record.image = buildImagePathByKind(kind, fileName);
@@ -2128,7 +2554,7 @@ const server = http.createServer(async (req, res) => {
                 image: record.image,
                 imageSizeBytes: compressedResult.buffer.length,
                 compression: {
-                    enabled: Boolean(TINIFY_API_KEY),
+                    enabled: tinyPngApi.isEnabled(),
                     compressed: compressedResult.compressed,
                     reason: compressedResult.reason,
                     originalBytes: binary.length,
@@ -2268,6 +2694,12 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
+        if (req.method === "GET" && pathname === "/api/cutscene-videos") {
+            const videos = await listCutsceneVideos();
+            sendJson(res, 200, { videos });
+            return;
+        }
+
         if (req.method === "GET" && pathname === "/api/level-backgrounds") {
             const levelData = await readLevelsData();
             const backgrounds = listLevelBackgrounds(levelData.levels);
@@ -2312,8 +2744,8 @@ const server = http.createServer(async (req, res) => {
             });
             const targetPath = path.join(targetDir, fileName);
             const binary = Buffer.from(dataBase64, "base64");
-            const normalizedResult = await normalizeBackgroundImageDimensions(binary, sourceExtension);
-            const compressedResult = await compressLevelImageWithTarget(normalizedResult.buffer, sourceExtension);
+            const normalizedResult = await tinyPngApi.normalizeBackgroundImageDimensions(binary, sourceExtension);
+            const compressedResult = await tinyPngApi.compressLevelImageWithTarget(normalizedResult.buffer, sourceExtension);
             await fsp.writeFile(targetPath, compressedResult.buffer);
 
             const nextBackground = path.posix.join(targetRelativeDir, fileName);
@@ -2329,7 +2761,7 @@ const server = http.createServer(async (req, res) => {
                 background: nextBackground,
                 backgroundImageName: path.posix.parse(fileName).name,
                 compression: {
-                    enabled: Boolean(TINIFY_API_KEY),
+                    enabled: tinyPngApi.isEnabled(),
                     compressed: compressedResult.compressed,
                     reason: compressedResult.reason,
                     originalBytes: binary.length,
@@ -2340,8 +2772,8 @@ const server = http.createServer(async (req, res) => {
                     targetReductionPercent: compressedResult.targetReductionPercent
                 },
                 normalizedDimensions: {
-                    width: BACKGROUND_TARGET_WIDTH,
-                    height: BACKGROUND_TARGET_HEIGHT,
+                    width: tinyPngApi.backgroundTargetWidth,
+                    height: tinyPngApi.backgroundTargetHeight,
                     applied: normalizedResult.normalized,
                     reason: normalizedResult.reason
                 }
@@ -2409,14 +2841,14 @@ const server = http.createServer(async (req, res) => {
             }
 
             const binary = Buffer.from(dataBase64, "base64");
-            const normalizedResult = await normalizeBackgroundImageDimensions(binary, sourceExtension);
-            const compressedResult = await compressLevelImageWithTarget(normalizedResult.buffer, sourceExtension);
+            const normalizedResult = await tinyPngApi.normalizeBackgroundImageDimensions(binary, sourceExtension);
+            const compressedResult = await tinyPngApi.compressLevelImageWithTarget(normalizedResult.buffer, sourceExtension);
             await fsp.writeFile(targetAbsolute, compressedResult.buffer);
             sendJson(res, 200, {
                 ok: true,
                 background: targetBackground,
                 compression: {
-                    enabled: Boolean(TINIFY_API_KEY),
+                    enabled: tinyPngApi.isEnabled(),
                     compressed: compressedResult.compressed,
                     reason: compressedResult.reason,
                     originalBytes: binary.length,
@@ -2427,8 +2859,8 @@ const server = http.createServer(async (req, res) => {
                     targetReductionPercent: compressedResult.targetReductionPercent
                 },
                 normalizedDimensions: {
-                    width: BACKGROUND_TARGET_WIDTH,
-                    height: BACKGROUND_TARGET_HEIGHT,
+                    width: tinyPngApi.backgroundTargetWidth,
+                    height: tinyPngApi.backgroundTargetHeight,
                     applied: normalizedResult.normalized,
                     reason: normalizedResult.reason
                 }
@@ -2458,7 +2890,7 @@ const server = http.createServer(async (req, res) => {
             const usage = getLevelBackgroundUsage(levelData.levels, targetBackground);
             if (usage.length > 0) {
                 return sendJson(res, 409, {
-                    error: "Background is in use by one or more rounds.",
+                    error: "Background is in use by one or more scenes.",
                     usage
                 });
             }
@@ -2543,8 +2975,8 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
-        if (req.method === "POST" && /^\/api\/levels\/[^/]+\/rounds$/.test(pathname)) {
-            const match = pathname.match(/^\/api\/levels\/([^/]+)\/rounds$/);
+        if (req.method === "POST" && /^\/api\/levels\/[^/]+\/scenes$/.test(pathname)) {
+            const match = pathname.match(/^\/api\/levels\/([^/]+)\/scenes$/);
             const levelId = toSafeLevelNumber(match && match[1], NaN);
             if (!Number.isFinite(levelId) || levelId <= 0) {
                 return sendJson(res, 400, { error: "Invalid level id." });
@@ -2553,65 +2985,71 @@ const server = http.createServer(async (req, res) => {
             const levelEntry = levelData.levels.find(entry => entry.id === levelId);
             if (!levelEntry) return sendJson(res, 404, { error: `Level '${levelId}' not found.` });
 
-            const nextRoundNumber = (Array.isArray(levelEntry.rounds) ? levelEntry.rounds.length : 0) + 1;
+            const nextSceneNumber = (Array.isArray(levelEntry.scenes) ? levelEntry.scenes.length : 0) + 1;
             const fallbackBackground = String(levelEntry.backgroundImages && levelEntry.backgroundImages[0] ? levelEntry.backgroundImages[0] : "");
-            const nextRound = normalizeLevelRound({
+            const nextScene = normalizeLevelRound({
                 enemy: null,
                 background: fallbackBackground,
-                backgroundImageName: `level_${levelId}_round_${nextRoundNumber}`,
+                backgroundImageName: `level_${levelId}_scene_${nextSceneNumber}`,
                 type: "fight"
             }, fallbackBackground);
-            if (!Array.isArray(levelEntry.rounds)) levelEntry.rounds = [];
-            levelEntry.rounds.push(nextRound);
+            if (!Array.isArray(levelEntry.scenes)) levelEntry.scenes = [];
+            levelEntry.scenes.push(nextScene);
             await writeLevelsData(levelData.levels, levelData.defaultLevelId);
-            return sendJson(res, 201, { ok: true, levelId, roundIndex: levelEntry.rounds.length - 1, round: nextRound });
+            return sendJson(res, 201, { ok: true, levelId, sceneIndex: levelEntry.scenes.length - 1, scene: nextScene });
         }
 
-        if (req.method === "PUT" && /^\/api\/levels\/[^/]+\/rounds\/[^/]+$/.test(pathname)) {
-            const match = pathname.match(/^\/api\/levels\/([^/]+)\/rounds\/([^/]+)$/);
+        if (req.method === "PUT" && /^\/api\/levels\/[^/]+\/scenes\/[^/]+$/.test(pathname)) {
+            const match = pathname.match(/^\/api\/levels\/([^/]+)\/scenes\/([^/]+)$/);
             const levelId = toSafeLevelNumber(match && match[1], NaN);
-            const roundIndex = Number(match && match[2]);
+            const sceneIndex = Number(match && match[2]);
             if (!Number.isFinite(levelId) || levelId <= 0) {
                 return sendJson(res, 400, { error: "Invalid level id." });
             }
-            if (!Number.isInteger(roundIndex) || roundIndex < 0) {
-                return sendJson(res, 400, { error: "Invalid round index." });
+            if (!Number.isInteger(sceneIndex) || sceneIndex < 0) {
+                return sendJson(res, 400, { error: "Invalid scene index." });
             }
             const payload = await readRequestBody(req);
             const levelData = await readLevelsData();
             const levelEntry = levelData.levels.find(entry => entry.id === levelId);
             if (!levelEntry) return sendJson(res, 404, { error: `Level '${levelId}' not found.` });
-            if (!Array.isArray(levelEntry.rounds) || !levelEntry.rounds[roundIndex]) {
-                return sendJson(res, 404, { error: `Round '${roundIndex}' not found in level '${levelId}'.` });
+            if (!Array.isArray(levelEntry.scenes) || !levelEntry.scenes[sceneIndex]) {
+                return sendJson(res, 404, { error: `scene '${sceneIndex}' not found in level '${levelId}'.` });
             }
-            const round = levelEntry.rounds[roundIndex];
+            const scene = levelEntry.scenes[sceneIndex];
             const validSellableIds = await getAllSellableItemIds();
 
             if (Object.prototype.hasOwnProperty.call(payload, "type")) {
                 const rawType = String(payload.type || "fight").trim().toLowerCase();
-                round.type = rawType === "event" || rawType === "vendor" ? rawType : "fight";
+                scene.type = rawType === "cutscene" || rawType === "vendor" || rawType === "fight"
+                    ? rawType
+                    : (rawType === "event" ? "cutscene" : "fight");
             }
             if (Object.prototype.hasOwnProperty.call(payload, "enemy")) {
                 const nextEnemy = payload.enemy;
-                round.enemy = nextEnemy === null || String(nextEnemy).trim() === "" ? null : String(nextEnemy).trim();
+                scene.enemy = nextEnemy === null || String(nextEnemy).trim() === "" ? null : String(nextEnemy).trim();
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, "cutsceneVideo")) {
+                const nextVideo = String(payload.cutsceneVideo || "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
+                scene.cutsceneVideo = nextVideo || null;
             }
             if (Object.prototype.hasOwnProperty.call(payload, "vendorItems")) {
                 const nextVendorItems = Array.isArray(payload.vendorItems) ? payload.vendorItems : [];
-                round.vendorItems = Array.from(new Set(
+                scene.vendorItems = Array.from(new Set(
                     nextVendorItems
                         .map(entry => sanitizeId(entry))
                         .filter(entry => entry && validSellableIds.has(entry))
                 ));
             }
             if (Object.prototype.hasOwnProperty.call(payload, "backgroundImageName")) {
-                round.backgroundImageName = sanitizeImageBaseName(payload.backgroundImageName, round.backgroundImageName || `level_${levelId}_round_${roundIndex + 1}`);
+                scene.backgroundImageName = sanitizeImageBaseName(payload.backgroundImageName, scene.backgroundImageName || `level_${levelId}_scene_${sceneIndex + 1}`);
             }
             if (Object.prototype.hasOwnProperty.call(payload, "background")) {
                 const nextBackground = String(payload.background || "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
                 if (nextBackground) {
-                    round.background = nextBackground;
-                    if (!round.backgroundImageName) {
-                        round.backgroundImageName = path.posix.parse(nextBackground).name || `level_${levelId}_round_${roundIndex + 1}`;
+                    scene.background = nextBackground;
+                    if (!scene.backgroundImageName) {
+                        scene.backgroundImageName = path.posix.parse(nextBackground).name || `level_${levelId}_scene_${sceneIndex + 1}`;
                     }
                     if (!Array.isArray(levelEntry.backgroundImages)) levelEntry.backgroundImages = [];
                     if (!levelEntry.backgroundImages.includes(nextBackground)) {
@@ -2620,42 +3058,50 @@ const server = http.createServer(async (req, res) => {
                 }
             }
 
-            const effectiveType = String(round.type || "fight").trim().toLowerCase();
+            const effectiveType = String(scene.type || "fight").trim().toLowerCase();
             if (effectiveType === "vendor") {
-                round.enemy = null;
-                if (!Array.isArray(round.vendorItems) || round.vendorItems.length <= 0) {
-                    return sendJson(res, 400, { error: "Vendor rounds require at least one selected item." });
+                scene.enemy = null;
+                scene.cutsceneVideo = null;
+                if (!Array.isArray(scene.vendorItems) || scene.vendorItems.length <= 0) {
+                    return sendJson(res, 400, { error: "Vendor scenes require at least one selected item." });
+                }
+            } else if (effectiveType === "cutscene") {
+                scene.enemy = null;
+                scene.vendorItems = [];
+                if (!scene.cutsceneVideo || !String(scene.cutsceneVideo).trim()) {
+                    return sendJson(res, 400, { error: "Cutscene scenes require a selected video." });
                 }
             } else {
-                round.vendorItems = [];
+                scene.vendorItems = [];
+                scene.cutsceneVideo = null;
             }
 
             await writeLevelsData(levelData.levels, levelData.defaultLevelId);
-            return sendJson(res, 200, { ok: true, levelId, roundIndex, round });
+            return sendJson(res, 200, { ok: true, levelId, sceneIndex, scene });
         }
 
-        if (req.method === "DELETE" && /^\/api\/levels\/[^/]+\/rounds\/[^/]+$/.test(pathname)) {
-            const match = pathname.match(/^\/api\/levels\/([^/]+)\/rounds\/([^/]+)$/);
+        if (req.method === "DELETE" && /^\/api\/levels\/[^/]+\/scenes\/[^/]+$/.test(pathname)) {
+            const match = pathname.match(/^\/api\/levels\/([^/]+)\/scenes\/([^/]+)$/);
             const levelId = toSafeLevelNumber(match && match[1], NaN);
-            const roundIndex = Number(match && match[2]);
+            const sceneIndex = Number(match && match[2]);
             if (!Number.isFinite(levelId) || levelId <= 0) {
                 return sendJson(res, 400, { error: "Invalid level id." });
             }
-            if (!Number.isInteger(roundIndex) || roundIndex < 0) {
-                return sendJson(res, 400, { error: "Invalid round index." });
+            if (!Number.isInteger(sceneIndex) || sceneIndex < 0) {
+                return sendJson(res, 400, { error: "Invalid scene index." });
             }
             const levelData = await readLevelsData();
             const levelEntry = levelData.levels.find(entry => entry.id === levelId);
             if (!levelEntry) return sendJson(res, 404, { error: `Level '${levelId}' not found.` });
-            if (!Array.isArray(levelEntry.rounds) || !levelEntry.rounds[roundIndex]) {
-                return sendJson(res, 404, { error: `Round '${roundIndex}' not found in level '${levelId}'.` });
+            if (!Array.isArray(levelEntry.scenes) || !levelEntry.scenes[sceneIndex]) {
+                return sendJson(res, 404, { error: `scene '${sceneIndex}' not found in level '${levelId}'.` });
             }
-            if (levelEntry.rounds.length <= 1) {
-                return sendJson(res, 400, { error: "A level must have at least 1 round." });
+            if (levelEntry.scenes.length <= 1) {
+                return sendJson(res, 400, { error: "A level must have at least 1 scene." });
             }
-            levelEntry.rounds.splice(roundIndex, 1);
+            levelEntry.scenes.splice(sceneIndex, 1);
             await writeLevelsData(levelData.levels, levelData.defaultLevelId);
-            return sendJson(res, 200, { ok: true, levelId, deletedRoundIndex: roundIndex, roundCount: levelEntry.rounds.length });
+            return sendJson(res, 200, { ok: true, levelId, deletedSceneIndex: sceneIndex, sceneCount: levelEntry.scenes.length });
         }
 
         if (req.method === "PUT" && pathname.startsWith("/api/enemies/")) {
@@ -2773,7 +3219,7 @@ const server = http.createServer(async (req, res) => {
             }
 
             const binary = Buffer.from(dataBase64, "base64");
-            const compressedResult = await compressEnemyImageWithFallback(binary, extension);
+            const compressedResult = await tinyPngApi.compressEnemyImageWithFallback(binary, extension);
             await fsp.writeFile(targetPath, compressedResult.buffer);
 
             const nextImgPath = `entity/enemy_class/${id}/${id}_images/${fileName}`;
@@ -2786,7 +3232,7 @@ const server = http.createServer(async (req, res) => {
                 img: nextImgPath,
                 imageSizeBytes: compressedResult.buffer.length,
                 compression: {
-                    enabled: Boolean(TINIFY_API_KEY),
+                    enabled: tinyPngApi.isEnabled(),
                     compressed: compressedResult.compressed,
                     reason: compressedResult.reason,
                     originalBytes: binary.length,
@@ -2798,15 +3244,15 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
-        if (req.method === "POST" && /^\/api\/levels\/[^/]+\/rounds\/[^/]+\/background$/.test(pathname)) {
-            const match = pathname.match(/^\/api\/levels\/([^/]+)\/rounds\/([^/]+)\/background$/);
+        if (req.method === "POST" && /^\/api\/levels\/[^/]+\/scenes\/[^/]+\/background$/.test(pathname)) {
+            const match = pathname.match(/^\/api\/levels\/([^/]+)\/scenes\/([^/]+)\/background$/);
             const levelId = toSafeLevelNumber(match && match[1], NaN);
-            const roundIndex = Number(match && match[2]);
+            const sceneIndex = Number(match && match[2]);
             if (!Number.isFinite(levelId) || levelId <= 0) {
                 return sendJson(res, 400, { error: "Invalid level id." });
             }
-            if (!Number.isInteger(roundIndex) || roundIndex < 0) {
-                return sendJson(res, 400, { error: "Invalid round index." });
+            if (!Number.isInteger(sceneIndex) || sceneIndex < 0) {
+                return sendJson(res, 400, { error: "Invalid scene index." });
             }
 
             const payload = await readRequestBody(req);
@@ -2816,18 +3262,18 @@ const server = http.createServer(async (req, res) => {
             const levelData = await readLevelsData();
             const levelEntry = levelData.levels.find(entry => entry.id === levelId);
             if (!levelEntry) return sendJson(res, 404, { error: `Level '${levelId}' not found.` });
-            if (!Array.isArray(levelEntry.rounds) || !levelEntry.rounds[roundIndex]) {
-                return sendJson(res, 404, { error: `Round '${roundIndex}' not found in level '${levelId}'.` });
+            if (!Array.isArray(levelEntry.scenes) || !levelEntry.scenes[sceneIndex]) {
+                return sendJson(res, 404, { error: `scene '${sceneIndex}' not found in level '${levelId}'.` });
             }
 
-            const originalName = sanitizeFilename(payload.filename || `level_${levelId}_round_${roundIndex + 1}.png`);
+            const originalName = sanitizeFilename(payload.filename || `level_${levelId}_scene_${sceneIndex + 1}.png`);
             const extension = path.extname(originalName).toLowerCase() || ".png";
             if (!ALLOWED_IMAGE_EXTENSIONS.has(extension)) {
                 return sendJson(res, 400, { error: "Unsupported image format." });
             }
 
-            const round = levelEntry.rounds[roundIndex];
-            const existingBackgroundPath = String(round.background || "").replace(/\\/g, "/").replace(/^\/+/, "");
+            const scene = levelEntry.scenes[sceneIndex];
+            const existingBackgroundPath = String(scene.background || "").replace(/\\/g, "/").replace(/^\/+/, "");
             const existingDir = existingBackgroundPath ? path.posix.dirname(existingBackgroundPath) : "";
             const fallbackDir = `level/level_background/level_${levelId}`;
             const targetRelativeDir = existingDir && existingDir !== "." ? existingDir : fallbackDir;
@@ -2839,7 +3285,7 @@ const server = http.createServer(async (req, res) => {
 
             const preferredBaseName = sanitizeImageBaseName(
                 payload.backgroundImageName,
-                round.backgroundImageName || `level_${levelId}_round_${roundIndex + 1}`
+                scene.backgroundImageName || `level_${levelId}_scene_${sceneIndex + 1}`
             );
             const fileName = ensureUniqueFileName({
                 dirPath: targetDir,
@@ -2848,13 +3294,13 @@ const server = http.createServer(async (req, res) => {
             });
             const targetPath = path.join(targetDir, fileName);
             const binary = Buffer.from(dataBase64, "base64");
-            const normalizedResult = await normalizeBackgroundImageDimensions(binary, extension);
-            const compressedResult = await compressLevelImageWithTarget(normalizedResult.buffer, extension);
+            const normalizedResult = await tinyPngApi.normalizeBackgroundImageDimensions(binary, extension);
+            const compressedResult = await tinyPngApi.compressLevelImageWithTarget(normalizedResult.buffer, extension);
             await fsp.writeFile(targetPath, compressedResult.buffer);
 
             const nextBackground = path.posix.join(targetRelativeDir.replace(/\\/g, "/"), fileName);
-            round.background = nextBackground;
-            round.backgroundImageName = path.posix.parse(fileName).name;
+            scene.background = nextBackground;
+            scene.backgroundImageName = path.posix.parse(fileName).name;
             if (!Array.isArray(levelEntry.backgroundImages)) levelEntry.backgroundImages = [];
             if (!levelEntry.backgroundImages.includes(nextBackground)) {
                 levelEntry.backgroundImages.push(nextBackground);
@@ -2864,11 +3310,11 @@ const server = http.createServer(async (req, res) => {
             sendJson(res, 200, {
                 ok: true,
                 levelId,
-                roundIndex,
+                sceneIndex,
                 background: nextBackground,
-                backgroundImageName: round.backgroundImageName,
+                backgroundImageName: scene.backgroundImageName,
                 compression: {
-                    enabled: Boolean(TINIFY_API_KEY),
+                    enabled: tinyPngApi.isEnabled(),
                     compressed: compressedResult.compressed,
                     reason: compressedResult.reason,
                     originalBytes: binary.length,
@@ -2879,8 +3325,8 @@ const server = http.createServer(async (req, res) => {
                     targetReductionPercent: compressedResult.targetReductionPercent
                 },
                 normalizedDimensions: {
-                    width: BACKGROUND_TARGET_WIDTH,
-                    height: BACKGROUND_TARGET_HEIGHT,
+                    width: tinyPngApi.backgroundTargetWidth,
+                    height: tinyPngApi.backgroundTargetHeight,
                     applied: normalizedResult.normalized,
                     reason: normalizedResult.reason
                 }

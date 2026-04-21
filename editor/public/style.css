@@ -22,7 +22,7 @@ body {
     margin: 0 auto;
     padding: 16px;
     display: grid;
-    gap: 16px;
+    gap: 8px;
 }
 
 .panel {
@@ -44,6 +44,20 @@ body {
     padding: 5px 10px;
     font-size: 0.76rem;
     border-width: 1px;
+}
+
+.editor-close-icon-btn {
+    min-width: 32px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-width: 1px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 h1 {
@@ -82,6 +96,28 @@ textarea {
     border-radius: 8px;
     padding: 8px 10px;
     font-size: 0.93rem;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    background: #0f1416;
+    color: var(--text);
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--text);
+    -webkit-box-shadow: 0 0 0px 1000px #0f1416 inset;
+    box-shadow: 0 0 0px 1000px #0f1416 inset;
+    transition: background-color 5000s ease-in-out 0s;
 }
 
 textarea {
@@ -135,15 +171,19 @@ button:disabled:hover {
 .stats-row {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 15px;
+    align-items: flex-start;
+    gap: 5px;
+    margin-top: 8px;
+    margin-bottom: 8px;
 }
 
 .stats-field {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    min-width: 50px;
+    min-width: 0;
+    width: fit-content;
+    max-width: 100%;
 }
 
 .stats-field input,
@@ -153,6 +193,21 @@ button:disabled:hover {
     font-size: 0.76rem;
     padding: 4px 6px;
     height: 30px;
+}
+
+.stats-field select.chance-select {
+    height: 24px;
+    padding: 2px 6px;
+}
+
+.stats-field input.effect-value-input {
+    width: 72px;
+    max-width: 72px;
+}
+
+.stats-field select.effect-value-type-select {
+    width: 56px;
+    max-width: 56px;
 }
 
 .stats-field #new-name {
@@ -174,6 +229,8 @@ button:disabled:hover {
 }
 
 .add-col-label {
+    display: inline-block;
+    min-height: 12px;
     font-size: 0.66rem;
     color: #c9ac79;
     text-transform: uppercase;
@@ -268,6 +325,11 @@ button:disabled:hover {
     width: 100%;
 }
 
+.stats-field.skill-desc-field {
+    flex: 1 1 320px;
+    min-width: 220px;
+}
+
 .stats-field input[type="checkbox"].plain-checkbox {
     width: auto;
     min-width: 0;
@@ -275,6 +337,11 @@ button:disabled:hover {
     padding: 0;
     margin: 0;
     accent-color: auto;
+}
+
+.stats-field input[type="checkbox"].one-shot-toggle {
+    transform: none;
+    transform-origin: initial;
 }
 
 .enemy-description {
@@ -292,6 +359,11 @@ button:disabled:hover {
     color: #ff6b6b;
     font-size: 0.8rem;
     line-height: 1.25;
+}
+
+.items-card-status {
+    flex: 1 0 100%;
+    margin-top: 4px;
 }
 
 .new-image-picker-btn {
@@ -323,6 +395,28 @@ button:disabled:hover {
     height: 100%;
     object-fit: contain;
     image-rendering: pixelated;
+}
+
+.cutscene-preview-toggle {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    z-index: 2;
+    min-width: 78px;
+    min-height: 28px;
+    padding: 5px 10px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    border: 1px solid #40535a;
+    border-radius: 4px;
+    background: rgba(8, 12, 14, 0.88);
+    color: #e8d3ad;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.cutscene-preview-toggle:hover {
+    border-color: #c99a56;
 }
 
 .add-image-inline-btn {
@@ -525,6 +619,62 @@ button:disabled:hover {
     background: rgba(8, 12, 14, 0.32);
 }
 
+.skill-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid #314248;
+    border-radius: 10px;
+    padding: 10px;
+    background: rgba(8, 12, 14, 0.32);
+}
+
+.skill-collapse-btn {
+    min-width: 28px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-width: 1px;
+    border-radius: 6px;
+    line-height: 1;
+    font-size: 0.9rem;
+}
+
+.skill-main-row {
+    align-items: center;
+}
+
+.skill-collapse-wrap {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+}
+
+.skill-main-icon-field {
+    width: 60px;
+    min-width: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.skills-editor-page .panel-title-row .row {
+    align-items: baseline;
+    gap: 10px;
+}
+
+.level-editor-page .enemy-card {
+    border-radius: 0;
+    border-left-width: 1px;
+    border-left-style: solid;
+    border-left-color: #314248;
+}
+
+.enemy-card.event-round-card {
+    background: rgba(8, 12, 14, 0.32);
+    border: 1px solid #314248;
+}
+
 .implemented-row {
     display: flex;
     align-items: center;
@@ -566,8 +716,29 @@ button:disabled:hover {
     min-width: 58px;
 }
 
+.enemy-stats-row {
+    align-items: flex-start;
+}
+
+.enemy-stats-row .stats-field:first-child {
+    min-width: 0;
+    width: auto;
+    flex: 0 0 auto;
+}
+
 .enemy-stats-row .stats-field:first-child input {
-    width: 116px;
+    width: 52px;
+}
+
+.enemy-stats-row .stats-field:first-child .scene-number-display {
+    width: 52px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    padding: 0 2px;
+    color: #c5d1ce;
+    font-size: 0.8rem;
+    line-height: 1;
 }
 
 .enemy-media-row {
@@ -578,6 +749,66 @@ button:disabled:hover {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+}
+
+.enemy-actions {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.skills-filter-actions {
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.skills-filter-actions button {
+    border: 0;
+    background: transparent;
+    color: #9fb4bb;
+    min-height: 0;
+    height: auto;
+    padding: 3px 8px;
+    font-size: 0.74rem;
+    letter-spacing: 0.01em;
+    text-transform: none;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.skills-filter-actions button:hover:not(:disabled) {
+    color: #d5e8ed;
+    text-decoration: underline;
+}
+
+.skills-filter-actions button.dirty {
+    color: #f3d49e;
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.skills-filter-actions button:disabled {
+    opacity: 1;
+    cursor: default;
+}
+
+.level-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.level-collapse-btn {
+    min-width: 32px;
+    width: 32px;
+    padding: 0;
+    font-size: 0.9rem;
+    line-height: 1;
 }
 
 .level-enemy-field {
@@ -901,13 +1132,41 @@ button:disabled:hover {
     font-weight: 500;
 }
 
+.player-item-chip > span {
+    min-width: 0;
+}
+
 .player-item-chip-image {
-    width: 20px;
-    height: 20px;
+    width: 40px;
+    height: 40px;
     object-fit: contain;
     border-radius: 3px;
     border: 1px solid #2f3f43;
     background: #0a0f11;
+}
+
+.player-item-chip-remove {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    padding: 0;
+    margin-left: 2px;
+    border-radius: 999px;
+    border: 1px solid #53666b;
+    background: #162024;
+    color: #cfdedb;
+    font-size: 12px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.player-item-chip-remove:hover {
+    border-color: #9f5555;
+    background: #3a1f1f;
+    color: #ffdede;
 }
 
 .player-item-add-wrap {
@@ -949,6 +1208,26 @@ button:disabled:hover {
     font-size: 0.78rem;
 }
 
+.player-item-option-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+}
+
+.player-item-option-label {
+    color: #d7e5e2;
+    line-height: 1.2;
+}
+
+.player-item-option-desc {
+    color: #95aaa6;
+    font-size: 0.72rem;
+    line-height: 1.25;
+    text-align: left;
+}
+
 .player-item-option-image {
     width: 24px;
     height: 24px;
@@ -956,6 +1235,23 @@ button:disabled:hover {
     border-radius: 3px;
     border: 1px solid #2f3f43;
     background: #0a0f11;
+}
+
+.player-skill-option-image {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    border-radius: 3px;
+    border: 1px solid #2f3f43;
+    background: #0a0f11;
+}
+
+.player-name-input {
+    width: 100px;
+}
+
+.player-page .enemy-stats-row .stats-field:first-child .player-name-input {
+    width: 100px;
 }
 
 .level-background-card-path {
@@ -1044,6 +1340,212 @@ button:disabled:hover {
     justify-content: flex-end;
 }
 
+.skill-icon-btn {
+    width: 60px;
+    height: 60px;
+    min-width: 60px;
+    padding: 0;
+    border-radius: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #101517;
+    border: 1px dashed #74614a;
+    box-shadow: none;
+}
+
+.skills-editor-page .stats-field .skill-icon-btn {
+    width: 60px;
+    height: 60px;
+    min-width: 60px;
+    padding: 0;
+}
+
+#new-icon-btn {
+    width: 60px;
+    height: 60px;
+    min-width: 60px;
+    padding: 0;
+    border-radius: 0;
+}
+
+.skill-icon-btn.has-image {
+    border-style: solid;
+    border-color: #41555b;
+}
+
+.skill-icon-btn.type-passive {
+    border-color: #e8c142;
+}
+
+.skill-icon-btn.type-buff {
+    border-color: #4084ff;
+}
+
+.skill-icon-btn.type-debuff {
+    border-color: #dc3434;
+}
+
+.skill-icon-btn:hover {
+    background: #101517;
+    border-color: #c99a56;
+    box-shadow: none;
+}
+
+.skill-icon-img {
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    aspect-ratio: 1 / 1;
+    display: block;
+}
+
+.skill-icon-fallback {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.skill-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 0;
+}
+
+.desc-token-btn {
+    margin-top: 4px;
+    align-self: flex-start;
+    min-height: 18px;
+    padding: 1px 4px;
+    font-size: 0.68rem;
+    line-height: 1;
+    border: 1px solid #9fb4bb;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    color: #9fb4bb;
+}
+
+.desc-token-btn:hover:not(:disabled) {
+    background: transparent;
+    box-shadow: none;
+    border-color: #9fb4bb;
+    color: #d5e8ed;
+}
+
+.desc-token-row {
+    margin-top: 4px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.desc-preview {
+    display: none;
+}
+
+.desc-token-highlight {
+    color: #eab308;
+    font-weight: 700;
+}
+
+.editor-desc-tooltip {
+    position: fixed;
+    z-index: 13000;
+    max-width: 300px;
+    padding: 8px 10px;
+    border: 1px solid rgba(179, 139, 77, 0.85);
+    border-radius: 8px;
+    background: rgba(12, 8, 6, 0.95);
+    color: #f2e8d8;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+}
+
+.skill-icon-modal-card {
+    width: min(720px, 100%);
+    max-height: 80vh;
+}
+
+.skill-icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+    gap: 8px;
+    overflow: auto;
+    max-height: 56vh;
+    padding: 2px;
+}
+
+.skill-icon-option {
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    padding: 0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.skills-editor-page .stats-row {
+    gap: 10px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.skills-editor-page .stats-field {
+    gap: 6px;
+}
+
+.skills-editor-page .skill-col-label {
+    display: inline-block;
+    min-height: 12px;
+    font-size: 0.66rem;
+    color: #c9ac79;
+    text-transform: uppercase;
+}
+
+#add-skill-panel .stats-field input:not([type="checkbox"]):not(:disabled),
+#add-skill-panel .stats-field select:not(:disabled),
+#add-skill-panel .stats-field textarea:not(:disabled) {
+    border-color: #5f7f88;
+    background: #0f1416;
+    color: var(--text);
+}
+
+#add-skill-panel .stats-field input:not([type="checkbox"]):not(:disabled):focus,
+#add-skill-panel .stats-field select:not(:disabled):focus,
+#add-skill-panel .stats-field textarea:not(:disabled):focus {
+    border-color: #8fb8c4;
+    box-shadow: 0 0 0 1px rgba(143, 184, 196, 0.25);
+}
+
+#add-skill-panel .stats-field input:disabled,
+#add-skill-panel .stats-field select:disabled,
+#add-skill-panel .stats-field textarea:disabled {
+    background: #070a0b;
+    border-color: #9b4b4b;
+    color: #6f7c82;
+    opacity: 1;
+    cursor: not-allowed;
+}
+
+#add-skill-panel .stats-field:has(input:disabled) .skill-col-label,
+#add-skill-panel .stats-field:has(select:disabled) .skill-col-label,
+#add-skill-panel .stats-field:has(textarea:disabled) .skill-col-label {
+    color: #2f3f43;
+}
+
+#add-skill-panel .stats-field.is-disabled .skill-col-label {
+    color: #2f3f43;
+}
+
+.skills-editor-page .stats-field.is-disabled > span,
+.skills-editor-page .stats-field.is-disabled .skill-col-label {
+    color: #2f3f43 !important;
+}
+
 .processing-overlay {
     position: fixed;
     inset: 0;
@@ -1103,6 +1605,10 @@ button:disabled:hover {
 
 .status-err {
     color: #ff8e8e;
+}
+
+.status-error {
+    color: #ff6b6b;
 }
 
 .info-tooltip {

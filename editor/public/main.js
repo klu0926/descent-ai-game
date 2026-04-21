@@ -3,22 +3,14 @@
     enemyOrder: [],
     sort: { col: "", dir: "" },
     dirtyById: new Map(),
-    levelsPicker: {
-        menuEl: null,
-        openAnchor: null,
-        selectedValues: ["all"],
-        onChange: null
-    },
     addValidationTouched: false,
     pendingDeleteId: "",
     activeImageJobs: 0,
     newImageFile: null,
-    newLevelsSelection: ["all"],
     metadata: {
         enemyTypeOptions: ["monster", "warrior", "mage", "archer", "rogue", "paladin", "spirit", "hunter"],
         enemySizeOptions: ["s", "m", "l", "xl", "2xl"],
-        enemySizeToPx: { s: 150, m: 220, l: 300, xl: 400, "2xl": 600 },
-        enemyLevelOptions: ["all", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+        enemySizeToPx: { s: 150, m: 220, l: 300, xl: 400, "2xl": 600 }
     }
 };
 
@@ -40,7 +32,8 @@ const el = {
     newCrit: document.getElementById("new-crit"),
     newDodge: document.getElementById("new-dodge"),
     newAim: document.getElementById("new-aim"),
-    newExp: document.getElementById("new-exp"),
+    newEssence: document.getElementById("new-essence"),
+    newCanAttack: document.getElementById("new-can-attack"),
     newDesc: document.getElementById("new-desc"),
     sizeTipTrigger: document.getElementById("size-tip-trigger"),
     addSuccessModal: document.getElementById("add-success-modal"),
@@ -67,7 +60,8 @@ const SORT_FIELDS = [
     { key: "crit", label: "crit" },
     { key: "dodge", label: "dodge" },
     { key: "aim", label: "aim" },
-    { key: "exp", label: "exp" }
+    { key: "essence", label: "essence" },
+    { key: "can_attack", label: "can attack" }
 ];
 
 function setStatus(message, kind = "muted") {
@@ -176,7 +170,7 @@ function getAddFormValidationErrors() {
         ["CRIT", el.newCrit],
         ["DODGE", el.newDodge],
         ["AIM", el.newAim],
-        ["EXP", el.newExp]
+        ["ESSENCE", el.newEssence]
     ];
     numericFields.forEach(([label, input]) => {
         const raw = String(input?.value ?? "").trim();
@@ -428,92 +422,6 @@ function getEnemySizeLabel(sizeValue) {
     return sizeKey;
 }
 
-function normalizeLevelsSelection(values) {
-    const normalized = (Array.isArray(values) ? values : [values])
-        .map(entry => String(entry))
-        .filter(Boolean);
-    if (normalized.includes("all")) return ["all"];
-    const unique = Array.from(new Set(normalized));
-    return unique.length > 0 ? unique : ["all"];
-}
-
-function formatLevelsLabel(values) {
-    const normalized = normalizeLevelsSelection(values);
-    if (normalized.includes("all")) return "all";
-    if (normalized.length <= 3) return normalized.join(", ");
-    return `${normalized.length} levels`;
-}
-
-function ensureLevelsPickerMenu() {
-    if (state.levelsPicker.menuEl) return state.levelsPicker.menuEl;
-    const menu = document.createElement("div");
-    menu.className = "levels-picker-menu";
-    menu.style.display = "none";
-    document.body.appendChild(menu);
-    state.levelsPicker.menuEl = menu;
-    return menu;
-}
-
-function closeLevelsPicker() {
-    const menu = ensureLevelsPickerMenu();
-    menu.style.display = "none";
-    menu.innerHTML = "";
-    state.levelsPicker.openAnchor = null;
-}
-
-function updateLevelsPickerButton(buttonEl, values) {
-    if (!buttonEl) return;
-    buttonEl.textContent = formatLevelsLabel(values);
-}
-
-function openLevelsPicker({ anchorEl, values, onChange }) {
-    const menu = ensureLevelsPickerMenu();
-    const options = (state.metadata.enemyLevelOptions || []).map(entry => String(entry));
-    let selected = normalizeLevelsSelection(values);
-    state.levelsPicker.selectedValues = selected;
-    state.levelsPicker.onChange = onChange;
-    state.levelsPicker.openAnchor = anchorEl;
-
-    const renderOptions = () => {
-        menu.innerHTML = "";
-        options.forEach(optionValue => {
-            const row = document.createElement("label");
-            row.className = "levels-picker-option";
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.value = optionValue;
-            checkbox.checked = selected.includes(optionValue);
-            checkbox.addEventListener("change", () => {
-                const next = new Set(selected);
-                if (optionValue === "all") {
-                    selected = checkbox.checked ? ["all"] : ["all"];
-                } else {
-                    next.delete("all");
-                    if (checkbox.checked) next.add(optionValue);
-                    else next.delete(optionValue);
-                    selected = normalizeLevelsSelection(Array.from(next));
-                }
-                state.levelsPicker.selectedValues = selected;
-                renderOptions();
-                if (typeof state.levelsPicker.onChange === "function") {
-                    state.levelsPicker.onChange(selected);
-                }
-            });
-            const text = document.createElement("span");
-            text.textContent = optionValue;
-            row.appendChild(checkbox);
-            row.appendChild(text);
-            menu.appendChild(row);
-        });
-    };
-
-    renderOptions();
-    const rect = anchorEl.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, rect.left)}px`;
-    menu.style.top = `${Math.min(window.innerHeight - 270, rect.bottom + 6)}px`;
-    menu.style.display = "block";
-}
-
 function renderSizeHelp() {
     if (!el.sizeTipTrigger) return;
     const entries = Object.entries(state.metadata.enemySizeToPx || {});
@@ -561,6 +469,18 @@ function createEnemyStatInput(enemy, field, isNumber = false, onDirtyChange = nu
     return input;
 }
 
+function createEnemyCheckboxInput(enemy, field, onDirtyChange = null) {
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "plain-checkbox";
+    input.checked = Boolean(getEnemyField(enemy, field));
+    input.addEventListener("change", () => {
+        setDirty(enemy, field, Boolean(input.checked));
+        if (typeof onDirtyChange === "function") onDirtyChange();
+    });
+    return input;
+}
+
 function createEnemyCard(enemy) {
     const card = document.createElement("div");
     card.className = "enemy-card";
@@ -595,7 +515,8 @@ function createEnemyCard(enemy) {
     statsRow.appendChild(createLabeledField("crit", createEnemyStatInput(enemy, "crit", true, updateCardActionState)));
     statsRow.appendChild(createLabeledField("dodge", createEnemyStatInput(enemy, "dodge", true, updateCardActionState)));
     statsRow.appendChild(createLabeledField("aim", createEnemyStatInput(enemy, "aim", true, updateCardActionState)));
-    statsRow.appendChild(createLabeledField("exp", createEnemyStatInput(enemy, "exp", true, updateCardActionState)));
+    statsRow.appendChild(createLabeledField("essence", createEnemyStatInput(enemy, "essence", true, updateCardActionState)));
+    statsRow.appendChild(createLabeledField("can attack", createEnemyCheckboxInput(enemy, "canAttack", updateCardActionState)));
 
     card.appendChild(statsRow);
 
@@ -741,6 +662,9 @@ function getEnemySortValue(enemy, col) {
         const sizeValue = String(getEnemyField(enemy, "size") || "").toLowerCase();
         return sizeOrder[sizeValue] || 0;
     }
+    if (col === "can_attack") {
+        return getEnemyField(enemy, "canAttack") ? 1 : 0;
+    }
     return Number(getEnemyField(enemy, col) || 0);
 }
 
@@ -748,7 +672,7 @@ function getRenderedEnemies() {
     if (!state.sort.col || !state.sort.dir) return state.enemies;
     const sorted = [...state.enemies];
     const dirMul = state.sort.dir === "asc" ? 1 : -1;
-    const numericCols = new Set(["size", "file_size", "hp", "atk", "def", "crit", "dodge", "aim", "exp"]);
+    const numericCols = new Set(["size", "file_size", "hp", "atk", "def", "crit", "dodge", "aim", "essence", "can_attack"]);
     sorted.sort((a, b) => {
         const av = getEnemySortValue(a, state.sort.col);
         const bv = getEnemySortValue(b, state.sort.col);
@@ -828,8 +752,7 @@ async function fetchMetadata() {
     state.metadata = {
         enemyTypeOptions: Array.isArray(payload.enemyTypeOptions) ? payload.enemyTypeOptions : state.metadata.enemyTypeOptions,
         enemySizeOptions: Array.isArray(payload.enemySizeOptions) ? payload.enemySizeOptions : state.metadata.enemySizeOptions,
-        enemySizeToPx: payload.enemySizeToPx && typeof payload.enemySizeToPx === "object" ? payload.enemySizeToPx : state.metadata.enemySizeToPx,
-        enemyLevelOptions: Array.isArray(payload.enemyLevelOptions) ? payload.enemyLevelOptions : state.metadata.enemyLevelOptions
+        enemySizeToPx: payload.enemySizeToPx && typeof payload.enemySizeToPx === "object" ? payload.enemySizeToPx : state.metadata.enemySizeToPx
     };
     renderCreateFormOptions();
 }
@@ -873,21 +796,20 @@ async function addEnemy() {
 
     const defaultType = (state.metadata.enemyTypeOptions || [])[0] || "monster";
     const defaultSize = (state.metadata.enemySizeOptions || [])[0] || "m";
-    const selectedLevels = normalizeLevelsSelection(state.newLevelsSelection);
     const displayName = (el.newName.value || "New Enemy").trim() || "New Enemy";
 
     const payload = {
         name: displayName,
         type: defaultType,
         size: el.newSize.value || defaultSize,
-        levels: ["all"],
         hp: Number(el.newHp.value || 0),
         atk: Number(el.newAtk.value || 0),
         def: Number(el.newDef.value || 0),
         crit: Number(el.newCrit.value || 0),
         dodge: Number(el.newDodge.value || 0),
         aim: Number(el.newAim.value || 0),
-        exp: Number(el.newExp.value || 0),
+        essence: Number(el.newEssence.value || 0),
+        canAttack: Boolean(el.newCanAttack && el.newCanAttack.checked),
         desc: el.newDesc.value || "Describe this enemy."
     };
 
@@ -907,6 +829,7 @@ async function addEnemy() {
 
     el.newName.value = "";
     el.newDesc.value = "";
+    if (el.newCanAttack) el.newCanAttack.checked = true;
     resetNewImageSelection();
     state.addValidationTouched = false;
 
@@ -981,19 +904,12 @@ if (el.deleteConfirmModal) {
     el.newCrit,
     el.newDodge,
     el.newAim,
-    el.newExp,
+    el.newEssence,
+    el.newCanAttack,
     el.newDesc
 ].filter(Boolean).forEach(input => {
     input.addEventListener("input", () => refreshAddFormValidation(state.addValidationTouched));
     input.addEventListener("change", () => refreshAddFormValidation(state.addValidationTouched));
-});
-
-document.addEventListener("click", event => {
-    const menu = ensureLevelsPickerMenu();
-    if (menu.style.display === "none") return;
-    if (event.target.closest(".levels-picker-menu")) return;
-    if (event.target.closest(".levels-picker-trigger")) return;
-    closeLevelsPicker();
 });
 
 document.addEventListener("keydown", event => {

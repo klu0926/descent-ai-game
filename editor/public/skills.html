@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skills Editor</title>
+    <link rel="stylesheet" href="./style.css?v=20260420b">
+    <script defer src="./skills.js?v=20260420b"></script>
+    <script>
+    (function () {
+        const stream = new EventSource('/__live_reload');
+        stream.addEventListener('reload', function () {
+            window.location.reload();
+        });
+    })();
+    </script>
+</head>
+<body class="skills-editor-page">
+<div class="wrap">
+    <div class="panel panel-top-nav">
+        <nav class="top-nav" aria-label="Editor sections">
+            <a class="top-nav-link" href="/player.html">Player</a>
+            <a class="top-nav-link" href="/enemy.html">Enemy</a>
+            <a class="top-nav-link" href="/level.html">Level</a>
+            <a class="top-nav-link" href="/backgrounds.html">Background</a>
+            <a class="top-nav-link" href="/items.html">Items</a>
+            <a class="top-nav-link" href="/events.html">Events</a>
+            <a class="top-nav-link is-active" href="/skills.html">Skills</a>
+        </nav>
+    </div>
+
+    <div id="add-skill-panel" class="skill-card">
+        <h1>Skills Editor</h1>
+        <div id="status" class="muted mt8">Loading skills...</div>
+    </div>
+
+    <div class="panel">
+        <h1 class="section-title">Add New Skill</h1>
+        <div class="stats-row mt8">
+            <div class="stats-field"><span class="skill-col-label">name</span><input id="new-name" placeholder="My Skill"></div>
+            <div class="stats-field"><span class="skill-col-label">type</span><select id="new-skill-type"></select></div>
+            <div class="stats-field"><span class="skill-col-label">duration turns</span><input id="new-duration-turns" type="number" value="0" min="0"></div>
+        </div>
+        <div class="stats-row mt8">
+            <div class="stats-field">
+                <span class="skill-col-label">icon</span>
+                <button id="new-icon-btn" type="button" class="skill-icon-btn" aria-label="Choose skill icon">
+                    <img id="new-icon-preview" class="skill-icon-img hidden" alt="skill icon preview">
+                    <span id="new-icon-fallback" class="skill-icon-fallback"></span>
+                </button>
+            </div>
+            <div class="stats-field skill-desc-field">
+                <span class="skill-col-label">description</span>
+                <textarea id="new-desc" class="enemy-description" placeholder="Skill description"></textarea>
+                <div class="desc-token-row">
+                    <button id="new-desc-insert-value-btn" type="button" class="desc-token-btn">[VALUE]</button>
+                    <button id="new-desc-insert-chance-btn" type="button" class="desc-token-btn">[CHANCE]</button>
+                </div>
+                <div id="new-desc-preview" class="desc-preview"></div>
+            </div>
+        </div>
+        <div id="new-passive-config" class="mt8">
+            <div class="stats-row">
+                <div class="stats-field">
+                    <span class="skill-col-label" title="Persistent = always active during duration. Conditional = event-triggered only.">mode</span>
+                    <select id="new-apply-mode" title="Persistent = always active during duration. Conditional = event-triggered only."></select>
+                </div>
+                <div class="stats-field"><span class="skill-col-label" title="Who triggers it.">trigger</span><select id="new-trigger-target" title="Who triggers it."></select></div>
+                <div class="stats-field"><span class="skill-col-label" title="When it activates.">event</span><select id="new-trigger-event" title="When it activates."></select></div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-field"><span class="skill-col-label">effect</span><select id="new-effect-select"></select></div>
+                <div class="stats-field"><span class="skill-col-label">+/-</span><select id="new-effect-sign"></select></div>
+                <div class="stats-field"><span class="skill-col-label">value</span><input id="new-effect-value" type="text" value=""></div>
+                <div class="stats-field"><span class="skill-col-label">type</span><select id="new-effect-value-type"></select></div>
+                <div class="stats-field hidden"><span class="skill-col-label">buff</span><select id="new-effect-flag-target"></select></div>
+                <div class="stats-field"><span class="skill-col-label">chance</span><select id="new-effect-chance"></select></div>
+                <div class="stats-field"><span class="skill-col-label">target</span><select id="new-target"></select></div>
+            </div>
+            <div class="stats-row mt8">
+                <div class="stats-field"><span class="skill-col-label">max rank</span><select id="new-max-rank"></select></div>
+                <div class="stats-field"><span class="skill-col-label">scaling value</span><input id="new-scaling-value" type="text" value=""></div>
+                <div class="stats-field"><span class="skill-col-label">scaling type</span><select id="new-scaling-value-type"></select></div>
+            </div>
+        </div>
+        <div class="mt8"><button id="add-btn" type="button">Add Skill</button></div>
+        <div id="status-error" class="muted mt8 status-error" hidden></div>
+    </div>
+
+    <div class="panel panel-flex-col">
+        <div class="panel-title-row">
+            <div class="row">
+                <h1 class="section-title">Skills</h1>
+                <div id="skills-count" class="muted">0</div>
+            </div>
+            <div class="enemy-actions skills-filter-actions">
+                <button id="skills-filter-all-btn" type="button">All</button>
+                <button id="skills-filter-active-btn" type="button">Active</button>
+                <button id="skills-filter-passive-btn" type="button">Passive</button>
+                <button id="skills-filter-buff-btn" type="button">Buff</button>
+                <button id="skills-filter-debuff-btn" type="button">Debuff</button>
+            </div>
+            <div class="enemy-actions">
+                <button id="skills-open-all-btn" type="button">Open All</button>
+                <button id="skills-close-all-btn" type="button">Close All</button>
+            </div>
+        </div>
+        <div id="skill-list" class="enemy-panel-list"></div>
+    </div>
+</div>
+
+<div id="skill-icon-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="skill-icon-modal-title">
+    <div class="modal-card skill-icon-modal-card">
+        <h2 id="skill-icon-modal-title" class="modal-title">Select Skill Icon</h2>
+        <div id="skill-icon-grid" class="skill-icon-grid"></div>
+        <div class="modal-actions">
+            <button id="skill-icon-clear-btn" type="button">Clear</button>
+            <button id="skill-icon-close-btn" type="button">Close</button>
+        </div>
+    </div>
+</div>
+</body>
+</html>
+
+

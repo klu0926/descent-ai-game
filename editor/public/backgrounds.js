@@ -60,10 +60,11 @@ function setupCollapsiblePanels() {
         if (!targetId) return;
         const target = document.getElementById(targetId);
         if (!target) return;
+        button.classList.add("editor-close-icon-btn");
         const applyState = isExpanded => {
             target.classList.toggle("hidden", !isExpanded);
             button.setAttribute("aria-expanded", isExpanded ? "true" : "false");
-            button.textContent = isExpanded ? "Close" : "Open";
+            button.textContent = isExpanded ? "\u25B4" : "\u25BE";
         };
         applyState(true);
         button.addEventListener("click", () => {

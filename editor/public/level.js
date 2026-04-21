@@ -2,14 +2,16 @@ const state = {
     levels: [],
     levelBackgrounds: [],
     enemies: [],
+    cutsceneVideos: [],
     sellableEntries: [],
     activeImageJobs: 0,
     openEnemyMenu: null,
-    dirtyByRound: new Map(),
-    pendingRoundDelete: null,
+    dirtyByScene: new Map(),
+    pendingSceneDelete: null,
     pendingBackgroundImport: null,
     pendingBackgroundSelect: null,
-    pendingVendorSelect: null
+    pendingVendorSelect: null,
+    collapsedLevels: new Set()
 };
 
 const el = {
@@ -78,16 +80,25 @@ function setupCollapsiblePanels() {
         if (!targetId) return;
         const target = document.getElementById(targetId);
         if (!target) return;
+        button.classList.add("editor-close-icon-btn");
         const applyState = isExpanded => {
             target.classList.toggle("hidden", !isExpanded);
             button.setAttribute("aria-expanded", isExpanded ? "true" : "false");
-            button.textContent = isExpanded ? "Close" : "Open";
+            button.textContent = isExpanded ? "\u25B4" : "\u25BE";
         };
         applyState(true);
         button.addEventListener("click", () => {
             const expanded = button.getAttribute("aria-expanded") === "true";
             applyState(!expanded);
         });
+    });
+}
+
+function setupCloseButtons() {
+    const closeButtons = [el.bgSelectCloseBtn, el.vendorSelectCloseBtn].filter(Boolean);
+    closeButtons.forEach(button => {
+        button.classList.add("editor-close-icon-btn");
+        button.textContent = "\u2715";
     });
 }
 
@@ -175,10 +186,10 @@ function closeEnemyMenu() {
     }
 }
 
-function openDeleteConfirmModal({ levelId, roundIndex }) {
-    state.pendingRoundDelete = { levelId, roundIndex };
+function openDeleteConfirmModal({ levelId, sceneIndex }) {
+    state.pendingSceneDelete = { levelId, sceneIndex };
     if (el.deleteConfirmMessage) {
-        el.deleteConfirmMessage.textContent = `Remove round ${roundIndex + 1} from level ${levelId}?`;
+        el.deleteConfirmMessage.textContent = `Remove Scene ${sceneIndex + 1} from level ${levelId}?`;
     }
     if (!el.deleteConfirmModal) return;
     el.deleteConfirmModal.classList.remove("hidden");
@@ -186,19 +197,19 @@ function openDeleteConfirmModal({ levelId, roundIndex }) {
 }
 
 function closeDeleteConfirmModal() {
-    state.pendingRoundDelete = null;
+    state.pendingSceneDelete = null;
     if (!el.deleteConfirmModal) return;
     el.deleteConfirmModal.classList.add("hidden");
     el.deleteConfirmModal.setAttribute("aria-hidden", "true");
 }
 
-function openBackgroundImportModal({ level, round, roundIndex, file, defaultName }) {
+function openBackgroundImportModal({ level, scene, sceneIndex, file, defaultName }) {
     if (!file) return;
-    const safeDefaultName = sanitizeImageBaseName(defaultName || file.name, `level_${level.id}_round_${roundIndex + 1}`);
+    const safeDefaultName = sanitizeImageBaseName(defaultName || file.name, `level_${level.id}_scene_${sceneIndex + 1}`);
     state.pendingBackgroundImport = {
         level,
-        round,
-        roundIndex,
+        scene,
+        sceneIndex,
         file,
         defaultName: safeDefaultName
     };
@@ -233,7 +244,7 @@ function renderBackgroundSelectModal() {
     if (backgrounds.length <= 0) {
         const empty = document.createElement("div");
         empty.className = "muted";
-        empty.textContent = "No backgrounds available. Add backgrounds in the Background page first.";
+        empty.textContent = "No backgrounds available. Add backgrounds in the background page first.";
         el.bgSelectList.appendChild(empty);
         return;
     }
@@ -275,8 +286,8 @@ function renderBackgroundSelectModal() {
     });
 }
 
-function openBackgroundSelectModal(levelId, roundIndex) {
-    state.pendingBackgroundSelect = { levelId, roundIndex };
+function openBackgroundSelectModal(levelId, sceneIndex) {
+    state.pendingBackgroundSelect = { levelId, sceneIndex };
     renderBackgroundSelectModal();
     if (!el.bgSelectModal) return;
     el.bgSelectModal.classList.remove("hidden");
@@ -296,9 +307,9 @@ function renderVendorSelectModal() {
     const pending = state.pendingVendorSelect;
     if (!pending) return;
     const level = state.levels.find(entry => Number(entry.id) === Number(pending.levelId));
-    if (!level || !Array.isArray(level.rounds) || !level.rounds[pending.roundIndex]) return;
-    const round = level.rounds[pending.roundIndex];
-    const selectedIds = new Set(getValidVendorItems(getRoundField(level, round, pending.roundIndex, "vendorItems")));
+    if (!level || !Array.isArray(level.scenes) || !level.scenes[pending.sceneIndex]) return;
+    const scene = level.scenes[pending.sceneIndex];
+    const selectedIds = new Set(getValidVendorItems(getSceneField(level, scene, pending.sceneIndex, "vendorItems")));
 
     if (!Array.isArray(state.sellableEntries) || state.sellableEntries.length <= 0) {
         const empty = document.createElement("div");
@@ -349,8 +360,8 @@ function renderVendorSelectModal() {
     });
 }
 
-function openVendorSelectModal(levelId, roundIndex) {
-    state.pendingVendorSelect = { levelId, roundIndex };
+function openVendorSelectModal(levelId, sceneIndex) {
+    state.pendingVendorSelect = { levelId, sceneIndex };
     renderVendorSelectModal();
     if (!el.vendorSelectModal) return;
     el.vendorSelectModal.classList.remove("hidden");
@@ -368,48 +379,48 @@ function toggleVendorItemFromModal(itemId) {
     const pending = state.pendingVendorSelect;
     if (!pending) return;
     const level = state.levels.find(entry => Number(entry.id) === Number(pending.levelId));
-    if (!level || !Array.isArray(level.rounds) || !level.rounds[pending.roundIndex]) return;
-    const round = level.rounds[pending.roundIndex];
-    const current = getValidVendorItems(getRoundField(level, round, pending.roundIndex, "vendorItems"));
+    if (!level || !Array.isArray(level.scenes) || !level.scenes[pending.sceneIndex]) return;
+    const scene = level.scenes[pending.sceneIndex];
+    const current = getValidVendorItems(getSceneField(level, scene, pending.sceneIndex, "vendorItems"));
     const hasItem = current.includes(itemId);
     const next = hasItem ? current.filter(id => id !== itemId) : [...current, itemId];
-    setRoundDirty(level, round, pending.roundIndex, "vendorItems", getValidVendorItems(next));
-    queueRoundAutoSave(level.id, pending.roundIndex);
+    setSceneDirty(level, scene, pending.sceneIndex, "vendorItems", getValidVendorItems(next));
+    queueSceneAutoSave(level.id, pending.sceneIndex);
     renderVendorSelectModal();
     renderLevelPanel();
-    setStatus(`Vendor items updated for level ${level.id}, round ${pending.roundIndex + 1}. Auto-saving.`);
+    setStatus(`Vendor items updated for level ${level.id}, Scene ${pending.sceneIndex + 1}. Auto-saving.`);
 }
 
 function assignBackgroundToPendingRound(backgroundPath, backgroundImageName = "") {
     const pending = state.pendingBackgroundSelect;
     if (!pending) return;
     const level = state.levels.find(entry => Number(entry.id) === Number(pending.levelId));
-    if (!level || !Array.isArray(level.rounds) || !level.rounds[pending.roundIndex]) {
+    if (!level || !Array.isArray(level.scenes) || !level.scenes[pending.sceneIndex]) {
         closeBackgroundSelectModal();
         return;
     }
-    const round = level.rounds[pending.roundIndex];
+    const scene = level.scenes[pending.sceneIndex];
     const nextPath = String(backgroundPath || "").trim();
     if (!nextPath) return;
     const fallbackName = sanitizeImageBaseName(
         getBackgroundPathLabel(nextPath).replace(/\.[a-zA-Z0-9]+$/, ""),
-        `level_${level.id}_round_${pending.roundIndex + 1}`
+        `level_${level.id}_scene_${pending.sceneIndex + 1}`
     );
     const nextName = sanitizeImageBaseName(backgroundImageName, fallbackName);
 
-    setRoundDirty(level, round, pending.roundIndex, DIRTY_PENDING_IMAGE_FILE, null);
-    setRoundDirty(level, round, pending.roundIndex, DIRTY_PENDING_IMAGE_PREVIEW_URL, null);
-    setRoundDirty(level, round, pending.roundIndex, "background", nextPath);
-    setRoundDirty(level, round, pending.roundIndex, "backgroundImageName", nextName);
-    setRoundDirty(level, round, pending.roundIndex, DIRTY_BACKGROUND_MODE, "existing");
+    setSceneDirty(level, scene, pending.sceneIndex, DIRTY_PENDING_IMAGE_FILE, null);
+    setSceneDirty(level, scene, pending.sceneIndex, DIRTY_PENDING_IMAGE_PREVIEW_URL, null);
+    setSceneDirty(level, scene, pending.sceneIndex, "background", nextPath);
+    setSceneDirty(level, scene, pending.sceneIndex, "backgroundImageName", nextName);
+    setSceneDirty(level, scene, pending.sceneIndex, DIRTY_BACKGROUND_MODE, "existing");
     closeBackgroundSelectModal();
-    queueRoundAutoSave(level.id, pending.roundIndex);
+    queueSceneAutoSave(level.id, pending.sceneIndex);
     renderLevelPanel();
-    setStatus(`Background selected for level ${level.id}, round ${pending.roundIndex + 1}. Auto-saving...`, "ok");
+    setStatus(`background selected for level ${level.id}, Scene ${pending.sceneIndex + 1}. Auto-saving...`, "ok");
 }
 
-function getRoundKey(levelId, roundIndex) {
-    return `${levelId}:${roundIndex}`;
+function getSceneKey(levelId, sceneIndex) {
+    return `${levelId}:${sceneIndex}`;
 }
 
 function valuesMatch(a, b) {
@@ -418,40 +429,40 @@ function valuesMatch(a, b) {
     return String(a ?? "") === String(b ?? "");
 }
 
-function getRoundField(level, round, roundIndex, field) {
-    const dirty = state.dirtyByRound.get(getRoundKey(level.id, roundIndex));
+function getSceneField(level, scene, sceneIndex, field) {
+    const dirty = state.dirtyByScene.get(getSceneKey(level.id, sceneIndex));
     if (dirty && Object.prototype.hasOwnProperty.call(dirty, field)) return dirty[field];
-    return round[field];
+    return scene[field];
 }
 
-function setRoundDirty(level, round, roundIndex, field, value) {
-    const key = getRoundKey(level.id, roundIndex);
-    const existing = { ...(state.dirtyByRound.get(key) || {}) };
+function setSceneDirty(level, scene, sceneIndex, field, value) {
+    const key = getSceneKey(level.id, sceneIndex);
+    const existing = { ...(state.dirtyByScene.get(key) || {}) };
     if (field === DIRTY_PENDING_IMAGE_FILE || field === DIRTY_PENDING_IMAGE_PREVIEW_URL) {
         if (value == null) delete existing[field];
         else existing[field] = value;
         if (Object.keys(existing).length === 0) {
-            state.dirtyByRound.delete(key);
+            state.dirtyByScene.delete(key);
             return;
         }
-        state.dirtyByRound.set(key, existing);
+        state.dirtyByScene.set(key, existing);
         return;
     }
-    const originalValue = round[field];
+    const originalValue = scene[field];
     if (valuesMatch(value, originalValue)) {
         delete existing[field];
     } else {
         existing[field] = value;
     }
     if (Object.keys(existing).length === 0) {
-        state.dirtyByRound.delete(key);
+        state.dirtyByScene.delete(key);
         return;
     }
-    state.dirtyByRound.set(key, existing);
+    state.dirtyByScene.set(key, existing);
 }
 
-function getRoundDirty(levelId, roundIndex) {
-    return state.dirtyByRound.get(getRoundKey(levelId, roundIndex)) || null;
+function getSceneDirty(levelId, sceneIndex) {
+    return state.dirtyByScene.get(getSceneKey(levelId, sceneIndex)) || null;
 }
 
 function getAutoSaveState() {
@@ -465,54 +476,54 @@ function getAutoSaveState() {
     return state.autoSave;
 }
 
-function queueRoundAutoSave(levelId, roundIndex) {
+function queueSceneAutoSave(levelId, sceneIndex) {
     const autoSave = getAutoSaveState();
-    const key = getRoundKey(levelId, roundIndex);
+    const key = getSceneKey(levelId, sceneIndex);
     const existingTimer = autoSave.timers.get(key);
     if (existingTimer) clearTimeout(existingTimer);
     const timer = setTimeout(() => {
         autoSave.timers.delete(key);
-        runRoundAutoSave(levelId, roundIndex).catch(error => {
-            setStatus(error.message || `Auto-save failed for level ${levelId}, round ${roundIndex + 1}.`, "err");
+        runSceneAutoSave(levelId, sceneIndex).catch(error => {
+            setStatus(error.message || `Auto-save failed for level ${levelId}, Scene ${sceneIndex + 1}.`, "err");
         });
     }, ROUND_AUTO_SAVE_DELAY_MS);
     autoSave.timers.set(key, timer);
 }
 
-async function runRoundAutoSave(levelId, roundIndex) {
+async function runSceneAutoSave(levelId, sceneIndex) {
     const autoSave = getAutoSaveState();
-    const key = getRoundKey(levelId, roundIndex);
+    const key = getSceneKey(levelId, sceneIndex);
     if (autoSave.inFlight.has(key)) {
         autoSave.rerun.add(key);
         return;
     }
     const level = state.levels.find(entry => Number(entry.id) === Number(levelId));
-    if (!level || !Array.isArray(level.rounds) || !level.rounds[roundIndex]) return;
+    if (!level || !Array.isArray(level.scenes) || !level.scenes[sceneIndex]) return;
     autoSave.inFlight.add(key);
     try {
-        await saveRoundChanges(level, roundIndex);
+        await saveSceneChanges(level, sceneIndex);
     } finally {
         autoSave.inFlight.delete(key);
         if (autoSave.rerun.has(key)) {
             autoSave.rerun.delete(key);
-            await runRoundAutoSave(levelId, roundIndex);
+            await runSceneAutoSave(levelId, sceneIndex);
         }
     }
 }
 
 function clearAllDirty() {
-    state.dirtyByRound.forEach((dirty, key) => {
+    state.dirtyByScene.forEach((dirty, key) => {
         void key;
         const previewUrl = dirty && dirty[DIRTY_PENDING_IMAGE_PREVIEW_URL];
         if (previewUrl) {
             try { URL.revokeObjectURL(previewUrl); } catch (_) {}
         }
     });
-    state.dirtyByRound.clear();
+    state.dirtyByScene.clear();
 }
 
-function clearPendingImagePreview(levelId, roundIndex) {
-    const dirty = getRoundDirty(levelId, roundIndex);
+function clearPendingImagePreview(levelId, sceneIndex) {
+    const dirty = getSceneDirty(levelId, sceneIndex);
     if (!dirty) return;
     const previewUrl = dirty[DIRTY_PENDING_IMAGE_PREVIEW_URL];
     if (previewUrl) {
@@ -520,16 +531,16 @@ function clearPendingImagePreview(levelId, roundIndex) {
     }
 }
 
-function hasRoundDirty(levelId, roundIndex) {
-    const dirty = state.dirtyByRound.get(getRoundKey(levelId, roundIndex));
+function hasSceneDirty(levelId, sceneIndex) {
+    const dirty = state.dirtyByScene.get(getSceneKey(levelId, sceneIndex));
     if (!dirty) return false;
     const meaningfulKeys = Object.keys(dirty).filter(key => key !== DIRTY_BACKGROUND_MODE);
     return meaningfulKeys.length > 0;
 }
 
-function resetRoundDirty(levelId, roundIndex) {
-    clearPendingImagePreview(levelId, roundIndex);
-    state.dirtyByRound.delete(getRoundKey(levelId, roundIndex));
+function resetSceneDirty(levelId, sceneIndex) {
+    clearPendingImagePreview(levelId, sceneIndex);
+    state.dirtyByScene.delete(getSceneKey(levelId, sceneIndex));
 }
 
 function createLabeledField(labelText, controlEl, extraClass = "") {
@@ -562,6 +573,13 @@ async function fetchEnemies() {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Failed to load enemies.");
     state.enemies = Array.isArray(payload.enemies) ? payload.enemies : [];
+}
+
+async function fetchCutsceneVideos() {
+    const response = await fetch("/api/cutscene-videos");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Failed to load cutscene videos.");
+    state.cutsceneVideos = Array.isArray(payload.videos) ? payload.videos : [];
 }
 
 async function fetchSellableEntries() {
@@ -628,15 +646,15 @@ function replaceLevelBackgroundRequest(payload, plannedAttempts = 2) {
                 resolve(body);
                 return;
             }
-            reject(new Error(body.error || "Background replacement failed."));
+            reject(new Error(body.error || "background replacement failed."));
         };
         xhr.onerror = () => {
             attemptTicker.stop();
-            reject(new Error("Background replacement failed."));
+            reject(new Error("background replacement failed."));
         };
         xhr.ontimeout = () => {
             attemptTicker.stop();
-            reject(new Error("Background replacement timed out. Please try a smaller image."));
+            reject(new Error("background replacement timed out. Please try a smaller image."));
         };
         xhr.send(JSON.stringify(payload));
     });
@@ -696,7 +714,7 @@ async function removeLevelBackground(backgroundPath) {
     if (!response.ok) {
         if (payload && Array.isArray(payload.usage) && payload.usage.length > 0) {
             const usageText = payload.usage
-                .map(entry => `Level ${entry.levelId} Round ${entry.round}`)
+                .map(entry => `Level ${entry.levelId} Scene ${entry.scene}`)
                 .join(", ");
             throw new Error(`Cannot remove image. In use by ${usageText}.`);
         }
@@ -709,7 +727,7 @@ function getEnemyById(enemyId) {
     return state.enemies.find(entry => String(entry.id) === String(enemyId)) || null;
 }
 
-function getDefaultEnemyIdForNewRound() {
+function getDefaultEnemyIdForNewScene() {
     const sorted = state.enemies
         .slice()
         .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
@@ -727,63 +745,63 @@ function getValidVendorItems(value) {
     ));
 }
 
-async function updateRound(levelId, roundIndex, changes) {
-    const response = await fetch(`/api/levels/${encodeURIComponent(levelId)}/rounds/${encodeURIComponent(roundIndex)}`, {
+async function updateScene(levelId, sceneIndex, changes) {
+    const response = await fetch(`/api/levels/${encodeURIComponent(levelId)}/scenes/${encodeURIComponent(sceneIndex)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(changes || {})
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Failed to update round.");
+    if (!response.ok) throw new Error(payload.error || "Failed to update scene.");
 
     const level = state.levels.find(entry => Number(entry.id) === Number(levelId));
-    if (level && Array.isArray(level.rounds) && level.rounds[roundIndex]) {
-        level.rounds[roundIndex] = { ...level.rounds[roundIndex], ...(payload.round || changes || {}) };
+    if (level && Array.isArray(level.scenes) && level.scenes[sceneIndex]) {
+        level.scenes[sceneIndex] = { ...level.scenes[sceneIndex], ...(payload.scene || changes || {}) };
     }
     return payload;
 }
 
-async function addRound(levelId) {
-    setStatus(`Adding round to level ${levelId}...`);
-    const response = await fetch(`/api/levels/${encodeURIComponent(levelId)}/rounds`, {
+async function addScene(levelId) {
+    setStatus(`Adding Scene to level ${levelId}...`);
+    const response = await fetch(`/api/levels/${encodeURIComponent(levelId)}/scenes`, {
         method: "POST"
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Failed to add round.");
+    if (!response.ok) throw new Error(payload.error || "Failed to add scene.");
 
-    // New rounds should start with a default enemy (first option in picker order).
-    const roundIndex = Number(payload && payload.roundIndex);
-    const defaultEnemyId = getDefaultEnemyIdForNewRound();
-    if (Number.isInteger(roundIndex) && roundIndex >= 0 && defaultEnemyId) {
-        await updateRound(levelId, roundIndex, { enemy: defaultEnemyId });
+    // New scenes should start with a default enemy (first option in picker order).
+    const sceneIndex = Number(payload && payload.sceneIndex);
+    const defaultEnemyId = getDefaultEnemyIdForNewScene();
+    if (Number.isInteger(sceneIndex) && sceneIndex >= 0 && defaultEnemyId) {
+        await updateScene(levelId, sceneIndex, { enemy: defaultEnemyId });
     }
 
     await Promise.all([fetchLevels(), fetchLevelBackgrounds()]);
     clearAllDirty();
     renderLevelPanel();
     renderBackgroundPanel();
-    setStatus(`Added round ${payload.roundIndex + 1} to level ${levelId}.`, "ok");
+    setStatus(`Added Scene ${payload.sceneIndex + 1} to level ${levelId}.`, "ok");
 }
 
-async function removeRound(levelId, roundIndex) {
-    setStatus(`Removing round ${roundIndex + 1} from level ${levelId}...`);
-    const response = await fetch(`/api/levels/${encodeURIComponent(levelId)}/rounds/${encodeURIComponent(roundIndex)}`, {
+async function removeScene(levelId, sceneIndex) {
+    setStatus(`Removing Scene ${sceneIndex + 1} from level ${levelId}...`);
+    const response = await fetch(`/api/levels/${encodeURIComponent(levelId)}/scenes/${encodeURIComponent(sceneIndex)}`, {
         method: "DELETE"
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Failed to remove round.");
+    if (!response.ok) throw new Error(payload.error || "Failed to remove scene.");
     await Promise.all([fetchLevels(), fetchLevelBackgrounds()]);
     clearAllDirty();
     renderLevelPanel();
     renderBackgroundPanel();
-    setStatus(`Removed round ${roundIndex + 1} from level ${levelId}.`, "ok");
+    setStatus(`Removed Scene ${sceneIndex + 1} from level ${levelId}.`, "ok");
 }
 
-function uploadRoundBackgroundRequest(levelId, roundIndex, payload, plannedAttempts = 2) {
+function uploadSceneBackgroundRequest(levelId, sceneIndex, payload, plannedAttempts = 2) {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         const attemptTicker = createAttemptTicker(plannedAttempts);
-        xhr.open("POST", `/api/levels/${encodeURIComponent(levelId)}/rounds/${encodeURIComponent(roundIndex)}/background`, true);
+        xhr.open("POST", `/api/levels/${encodeURIComponent(levelId)}/scenes/${encodeURIComponent(sceneIndex)}/background`, true);
         xhr.timeout = 120000;
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.upload.onprogress = event => {
@@ -822,16 +840,16 @@ function uploadRoundBackgroundRequest(levelId, roundIndex, payload, plannedAttem
     });
 }
 
-async function uploadRoundBackground(levelId, roundIndex, file, imageBaseName) {
+async function uploadSceneBackground(levelId, sceneIndex, file, imageBaseName) {
     if (!file) return;
     state.activeImageJobs += 1;
     updateImageProcessingOverlay();
     setProcessingProgress(5, "Reading image...");
-    setStatus(`Uploading round background for level ${levelId}, round ${roundIndex + 1}...`);
+    setStatus(`Uploading scene background for level ${levelId}, Scene ${sceneIndex + 1}...`);
     try {
         const plannedAttempts = getPlannedBackgroundAttempts(file.size);
         const dataBase64 = await fileToBase64(file);
-        const payload = await uploadRoundBackgroundRequest(levelId, roundIndex, {
+        const payload = await uploadSceneBackgroundRequest(levelId, sceneIndex, {
             filename: file.name,
             dataBase64,
             backgroundImageName: imageBaseName
@@ -839,9 +857,9 @@ async function uploadRoundBackground(levelId, roundIndex, file, imageBaseName) {
         setProcessingProgress(98, "Saving image...");
 
         const level = state.levels.find(entry => Number(entry.id) === Number(levelId));
-        if (level && Array.isArray(level.rounds) && level.rounds[roundIndex]) {
-            level.rounds[roundIndex].background = payload.background;
-            level.rounds[roundIndex].backgroundImageName = payload.backgroundImageName;
+        if (level && Array.isArray(level.scenes) && level.scenes[sceneIndex]) {
+            level.scenes[sceneIndex].background = payload.background;
+            level.scenes[sceneIndex].backgroundImageName = payload.backgroundImageName;
             if (!Array.isArray(level.backgroundImages)) level.backgroundImages = [];
             if (payload.background && !level.backgroundImages.includes(payload.background)) {
                 level.backgroundImages.push(payload.background);
@@ -859,22 +877,22 @@ async function uploadRoundBackground(levelId, roundIndex, file, imageBaseName) {
                 const target = Number.isFinite(compression.targetReductionPercent) ? `${compression.targetReductionPercent}%` : "n/a";
                 const attempts = `${compression.attemptsUsed || 1}/${compression.maxAttempts || plannedAttempts}`;
                 setStatus(
-                    `Updated background for level ${levelId}, round ${roundIndex + 1}. TinyPNG compressed ${compression.originalBytes} -> ${compression.savedBytes} bytes (${reduction} smaller, target ${target}, attempts ${attempts}).`,
+                    `Updated background for level ${levelId}, Scene ${sceneIndex + 1}. TinyPNG compressed ${compression.originalBytes} -> ${compression.savedBytes} bytes (${reduction} smaller, target ${target}, attempts ${attempts}).`,
                     "ok"
                 );
             } else if (!compression.enabled) {
                 setStatus(
-                    `Updated background for level ${levelId}, round ${roundIndex + 1}. TinyPNG disabled (missing API key).`,
+                    `Updated background for level ${levelId}, Scene ${sceneIndex + 1}. TinyPNG disabled (missing API key).`,
                     "ok"
                 );
             } else {
                 setStatus(
-                    `Updated background for level ${levelId}, round ${roundIndex + 1}. TinyPNG skipped (${compression.reason || "no change"}).`,
+                    `Updated background for level ${levelId}, Scene ${sceneIndex + 1}. TinyPNG skipped (${compression.reason || "no change"}).`,
                     "ok"
                 );
             }
         } else {
-            setStatus(`Updated background for level ${levelId}, round ${roundIndex + 1}.`, "ok");
+            setStatus(`Updated background for level ${levelId}, Scene ${sceneIndex + 1}.`, "ok");
         }
     } finally {
         state.activeImageJobs = Math.max(0, state.activeImageJobs - 1);
@@ -882,7 +900,7 @@ async function uploadRoundBackground(levelId, roundIndex, file, imageBaseName) {
     }
 }
 
-function createEnemyPicker(level, round, roundIndex, selectedEnemyId, onSelect) {
+function createEnemyPicker(level, scene, sceneIndex, selectedEnemyId, onSelect) {
     const picker = document.createElement("div");
     picker.className = "level-enemy-picker";
 
@@ -891,7 +909,7 @@ function createEnemyPicker(level, round, roundIndex, selectedEnemyId, onSelect) 
     trigger.className = "level-enemy-trigger";
 
     const selectedEnemy = selectedEnemyId ? getEnemyById(selectedEnemyId) : null;
-    trigger.textContent = selectedEnemy ? selectedEnemy.name || selectedEnemy.id : "(none)";
+    trigger.textContent = selectedEnemy ? selectedEnemy.name || selectedEnemy.id : "";
 
     const menu = document.createElement("div");
     menu.className = "level-enemy-menu hidden";
@@ -958,78 +976,103 @@ function createEnemyPicker(level, round, roundIndex, selectedEnemyId, onSelect) 
     return picker;
 }
 
-async function saveRoundChanges(level, roundIndex) {
-    const key = getRoundKey(level.id, roundIndex);
-    const changes = { ...(state.dirtyByRound.get(key) || {}) };
+async function saveSceneChanges(level, sceneIndex) {
+    const key = getSceneKey(level.id, sceneIndex);
+    const changes = { ...(state.dirtyByScene.get(key) || {}) };
     if (!changes || Object.keys(changes).length === 0) {
-        setStatus(`No changes to save for level ${level.id}, round ${roundIndex + 1}.`);
+        setStatus(`No changes to save for level ${level.id}, Scene ${sceneIndex + 1}.`);
         return;
     }
-    setStatus(`Saving level ${level.id}, round ${roundIndex + 1}...`);
+    setStatus(`Saving level ${level.id}, Scene ${sceneIndex + 1}...`);
     const pendingFile = changes[DIRTY_PENDING_IMAGE_FILE] || null;
     const pendingPreviewUrl = changes[DIRTY_PENDING_IMAGE_PREVIEW_URL] || "";
-    const round = level.rounds && level.rounds[roundIndex] ? level.rounds[roundIndex] : null;
+    const scene = level.scenes && level.scenes[sceneIndex] ? level.scenes[sceneIndex] : null;
     delete changes[DIRTY_PENDING_IMAGE_FILE];
     delete changes[DIRTY_PENDING_IMAGE_PREVIEW_URL];
     delete changes[DIRTY_BACKGROUND_MODE];
 
-    const effectiveType = String(
+    const rawEffectiveType = String(
         Object.prototype.hasOwnProperty.call(changes, "type")
             ? changes.type
-            : (round && round.type) || "fight"
+            : (scene && scene.type) || "fight"
     ).trim().toLowerCase();
+    const effectiveType = rawEffectiveType === "event" ? "cutscene" : rawEffectiveType;
+    const firstEnemyId = state.enemies
+        .slice()
+        .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)))
+        .map(entry => String(entry && entry.id || "").trim())
+        .find(Boolean) || "";
     const effectiveVendorItems = getValidVendorItems(
         Object.prototype.hasOwnProperty.call(changes, "vendorItems")
             ? changes.vendorItems
-            : (round && round.vendorItems)
+            : (scene && scene.vendorItems)
     );
+    const effectiveCutsceneVideo = String(
+        Object.prototype.hasOwnProperty.call(changes, "cutsceneVideo")
+            ? changes.cutsceneVideo
+            : (scene && scene.cutsceneVideo) || ""
+    ).trim();
+    const effectiveEnemy = String(
+        Object.prototype.hasOwnProperty.call(changes, "enemy")
+            ? changes.enemy
+            : (scene && scene.enemy) || ""
+    ).trim();
+    if (effectiveType === "fight" && !effectiveEnemy && firstEnemyId) {
+        changes.enemy = firstEnemyId;
+    }
     if (effectiveType === "vendor" && effectiveVendorItems.length <= 0) {
-        if (round) round.vendorItems = [];
+        if (scene) scene.vendorItems = [];
         renderLevelPanel();
-        setStatus(`Cannot save level ${level.id}, round ${roundIndex + 1}: vendor requires at least 1 item.`, "err");
+        setStatus(`Cannot save level ${level.id}, Scene ${sceneIndex + 1}: vendor requires at least 1 item.`, "err");
+        return;
+    }
+    if (effectiveType === "cutscene" && !effectiveCutsceneVideo) {
+        if (scene) scene.cutsceneVideo = null;
+        renderLevelPanel();
+        setStatus(`Cannot save level ${level.id}, Scene ${sceneIndex + 1}: cutscene requires a selected video.`, "err");
         return;
     }
 
     let payload = null;
     if (Object.keys(changes).length > 0) {
-        payload = await updateRound(level.id, roundIndex, changes);
+        payload = await updateScene(level.id, sceneIndex, changes);
     }
-    if (round && payload) {
-        Object.assign(round, payload.round || changes);
-    } else if (round && Object.keys(changes).length > 0) {
-        Object.assign(round, changes);
+    if (scene && payload) {
+        Object.assign(scene, payload.scene || changes);
+    } else if (scene && Object.keys(changes).length > 0) {
+        Object.assign(scene, changes);
     }
 
     if (pendingFile) {
         const uploadName = sanitizeImageBaseName(
-            (round && round.backgroundImageName) || changes.backgroundImageName || `level_${level.id}_round_${roundIndex + 1}`,
-            `level_${level.id}_round_${roundIndex + 1}`
+            (scene && scene.backgroundImageName) || changes.backgroundImageName || `level_${level.id}_scene_${sceneIndex + 1}`,
+            `level_${level.id}_scene_${sceneIndex + 1}`
         );
-        await uploadRoundBackground(level.id, roundIndex, pendingFile, uploadName);
+        await uploadSceneBackground(level.id, sceneIndex, pendingFile, uploadName);
     }
 
     if (pendingPreviewUrl) {
         try { URL.revokeObjectURL(pendingPreviewUrl); } catch (_) {}
     }
-    state.dirtyByRound.delete(key);
+    state.dirtyByScene.delete(key);
     await fetchLevelBackgrounds();
     renderLevelPanel();
     renderBackgroundPanel();
-    setStatus(`Saved level ${level.id}, round ${roundIndex + 1}.`, "ok");
+    setStatus(`Saved level ${level.id}, Scene ${sceneIndex + 1}.`, "ok");
 }
 
 async function commitPendingBackgroundImport() {
     const pending = state.pendingBackgroundImport;
     if (!pending) return;
-    const { level, round, roundIndex, file, defaultName } = pending;
+    const { level, scene, sceneIndex, file, defaultName } = pending;
     const typedName = sanitizeImageBaseName(
         el.bgImportNameInput ? el.bgImportNameInput.value : "",
         defaultName
     );
     closeBackgroundImportModal({ clearPending: false });
     try {
-        await uploadRoundBackground(level.id, roundIndex, file, typedName);
-        resetRoundDirty(level.id, roundIndex);
+        await uploadSceneBackground(level.id, sceneIndex, file, typedName);
+        resetSceneDirty(level.id, sceneIndex);
         state.pendingBackgroundImport = null;
     } catch (error) {
         setStatus(error.message || "Failed to import background image.", "err");
@@ -1037,7 +1080,7 @@ async function commitPendingBackgroundImport() {
     }
 }
 
-function createRoundCard(level, round, roundIndex, totalRounds) {
+function createSceneCard(level, scene, sceneIndex, totalScenes) {
     const row = document.createElement("div");
     row.className = "enemy-card";
 
@@ -1045,36 +1088,50 @@ function createRoundCard(level, round, roundIndex, totalRounds) {
     statsRow.className = "stats-row enemy-stats-row";
 
     let enemyFieldWrap = null;
+    let cutsceneFieldWrap = null;
     let vendorFieldWrap = null;
     let warningEl = null;
     const updateWarningState = () => {
         if (!warningEl) return;
-        const effectiveType = String(getRoundField(level, round, roundIndex, "type") || "fight");
-        const effectiveEnemy = getRoundField(level, round, roundIndex, "enemy");
+        const rawEffectiveType = String(getSceneField(level, scene, sceneIndex, "type") || "fight").trim().toLowerCase();
+        const effectiveType = rawEffectiveType === "event" ? "cutscene" : rawEffectiveType;
+        const effectiveEnemy = getSceneField(level, scene, sceneIndex, "enemy");
         const hasEnemy = !(effectiveEnemy === null || String(effectiveEnemy).trim() === "");
-        const effectiveVendorItems = getValidVendorItems(getRoundField(level, round, roundIndex, "vendorItems"));
+        const effectiveVendorItems = getValidVendorItems(getSceneField(level, scene, sceneIndex, "vendorItems"));
+        const effectiveCutsceneVideo = String(getSceneField(level, scene, sceneIndex, "cutsceneVideo") || "").trim();
         const hasVendorItems = effectiveVendorItems.length > 0;
         const shouldWarnFight = effectiveType === "fight" && !hasEnemy;
         const shouldWarnVendor = effectiveType === "vendor" && !hasVendorItems;
         warningEl.textContent = shouldWarnFight
-            ? "Warning: Fight rounds require an enemy."
-            : (shouldWarnVendor ? "Warning: Vendor rounds require at least 1 selected item." : "");
+            ? "Warning: Fight scenes require an enemy."
+            : (shouldWarnVendor ? "Warning: Vendor scenes require at least 1 selected item." : "");
         warningEl.classList.toggle("hidden", !shouldWarnFight && !shouldWarnVendor);
         warningEl.style.color = shouldWarnVendor ? "#ef4444" : "";
-        if (enemyFieldWrap) enemyFieldWrap.classList.toggle("hidden", effectiveType === "vendor");
+        if (enemyFieldWrap) enemyFieldWrap.classList.toggle("hidden", effectiveType !== "fight");
+        if (cutsceneFieldWrap) cutsceneFieldWrap.classList.toggle("hidden", effectiveType !== "cutscene");
         if (vendorFieldWrap) vendorFieldWrap.classList.toggle("hidden", effectiveType !== "vendor");
     };
-    const roundNumber = document.createElement("input");
-    roundNumber.type = "text";
-    roundNumber.value = String(roundIndex + 1);
-    roundNumber.disabled = true;
-    statsRow.appendChild(createLabeledField("round", roundNumber));
+    const roundNumber = document.createElement("div");
+    roundNumber.className = "scene-number-display";
+    roundNumber.textContent = String(sceneIndex + 1);
+    statsRow.appendChild(createLabeledField("scene", roundNumber));
 
     const typeSelect = document.createElement("select");
-    const currentType = String(getRoundField(level, round, roundIndex, "type") || "fight");
+    const rawCurrentType = String(getSceneField(level, scene, sceneIndex, "type") || "fight").trim().toLowerCase();
+    const currentType = rawCurrentType === "event" ? "cutscene" : rawCurrentType;
+    row.classList.toggle("level-round-event", currentType !== "fight");
+    row.classList.toggle("event-round-card", currentType !== "fight");
+    row.classList.toggle("level-round-fight", currentType === "fight");
+    const sortedEnemies = state.enemies
+        .slice()
+        .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+    const firstEnemyId = sortedEnemies.length > 0 ? String(sortedEnemies[0] && sortedEnemies[0].id || "").trim() : "";
+    const firstCutsceneVideoPath = state.cutsceneVideos.length > 0
+        ? String(state.cutsceneVideos[0] && state.cutsceneVideos[0].path || "").trim()
+        : "";
     [
         { value: "fight", label: "fight" },
-        { value: "event", label: "event" },
+        { value: "cutscene", label: "cutscene event" },
         { value: "vendor", label: "vendor event" }
     ].forEach(typeEntry => {
         const option = document.createElement("option");
@@ -1085,29 +1142,61 @@ function createRoundCard(level, round, roundIndex, totalRounds) {
     });
     typeSelect.addEventListener("change", () => {
         const nextType = typeSelect.value;
-        setRoundDirty(level, round, roundIndex, "type", nextType);
+        setSceneDirty(level, scene, sceneIndex, "type", nextType);
         if (nextType === "vendor") {
-            setRoundDirty(level, round, roundIndex, "enemy", null);
+            setSceneDirty(level, scene, sceneIndex, "enemy", null);
+            setSceneDirty(level, scene, sceneIndex, "cutsceneVideo", null);
+        } else if (nextType === "cutscene") {
+            setSceneDirty(level, scene, sceneIndex, "enemy", null);
+            setSceneDirty(level, scene, sceneIndex, "vendorItems", []);
+            setSceneDirty(level, scene, sceneIndex, "cutsceneVideo", firstCutsceneVideoPath || null);
         } else {
-            setRoundDirty(level, round, roundIndex, "vendorItems", []);
+            if (!String(getSceneField(level, scene, sceneIndex, "enemy") || "").trim()) {
+                setSceneDirty(level, scene, sceneIndex, "enemy", firstEnemyId || null);
+            }
+            setSceneDirty(level, scene, sceneIndex, "cutsceneVideo", null);
+            setSceneDirty(level, scene, sceneIndex, "vendorItems", []);
         }
         updateWarningState();
-        queueRoundAutoSave(level.id, roundIndex);
+        queueSceneAutoSave(level.id, sceneIndex);
         renderLevelPanel();
     });
     statsRow.appendChild(createLabeledField("type", typeSelect));
 
-    const selectedEnemyId = getRoundField(level, round, roundIndex, "enemy");
-    const enemyPicker = createEnemyPicker(level, round, roundIndex, selectedEnemyId, enemyId => {
-        setRoundDirty(level, round, roundIndex, "enemy", enemyId);
-        queueRoundAutoSave(level.id, roundIndex);
+    const selectedEnemyIdRaw = String(getSceneField(level, scene, sceneIndex, "enemy") || "").trim();
+    const selectedEnemyId = (currentType === "fight" && !selectedEnemyIdRaw)
+        ? (firstEnemyId || null)
+        : (selectedEnemyIdRaw || null);
+    const enemyPicker = createEnemyPicker(level, scene, sceneIndex, selectedEnemyId, enemyId => {
+        setSceneDirty(level, scene, sceneIndex, "enemy", enemyId);
+        queueSceneAutoSave(level.id, sceneIndex);
         renderLevelPanel();
-        setStatus(`Enemy selection changed for level ${level.id}, round ${roundIndex + 1}. Auto-saving.`);
+        setStatus(`Enemy selection changed for level ${level.id}, Scene ${sceneIndex + 1}. Auto-saving.`);
     });
     enemyFieldWrap = createLabeledField("enemy", enemyPicker, "level-enemy-field");
     statsRow.appendChild(enemyFieldWrap);
 
-    const vendorItemsValue = getValidVendorItems(getRoundField(level, round, roundIndex, "vendorItems"));
+    const cutsceneVideoSelect = document.createElement("select");
+    const selectedCutsceneVideoRaw = String(getSceneField(level, scene, sceneIndex, "cutsceneVideo") || "").trim();
+    const selectedCutsceneVideo = selectedCutsceneVideoRaw || firstCutsceneVideoPath;
+    state.cutsceneVideos.forEach(video => {
+        const option = document.createElement("option");
+        option.value = String(video && video.path || "");
+        option.textContent = String(video && video.name || video && video.path || "video");
+        if (option.value === selectedCutsceneVideo) option.selected = true;
+        cutsceneVideoSelect.appendChild(option);
+    });
+    cutsceneVideoSelect.addEventListener("change", () => {
+        const nextVideo = String(cutsceneVideoSelect.value || "").trim();
+        setSceneDirty(level, scene, sceneIndex, "cutsceneVideo", nextVideo || null);
+        queueSceneAutoSave(level.id, sceneIndex);
+        renderLevelPanel();
+        setStatus(`Cutscene video changed for level ${level.id}, Scene ${sceneIndex + 1}. Auto-saving.`);
+    });
+    cutsceneFieldWrap = createLabeledField("cutscene", cutsceneVideoSelect, "level-cutscene-field");
+    statsRow.appendChild(cutsceneFieldWrap);
+
+    const vendorItemsValue = getValidVendorItems(getSceneField(level, scene, sceneIndex, "vendorItems"));
     const vendorPicker = document.createElement("div");
     vendorPicker.className = "level-vendor-picker";
     const selectedInfo = document.createElement("div");
@@ -1117,7 +1206,7 @@ function createRoundCard(level, round, roundIndex, totalRounds) {
     openVendorBtn.type = "button";
     openVendorBtn.className = "btn-secondary";
     openVendorBtn.textContent = "Select Vendor Items";
-    openVendorBtn.addEventListener("click", () => openVendorSelectModal(level.id, roundIndex));
+    openVendorBtn.addEventListener("click", () => openVendorSelectModal(level.id, sceneIndex));
     vendorPicker.appendChild(selectedInfo);
     vendorPicker.appendChild(openVendorBtn);
     vendorFieldWrap = createLabeledField("item select", vendorPicker, "level-vendor-field");
@@ -1128,7 +1217,7 @@ function createRoundCard(level, round, roundIndex, totalRounds) {
     const mediaRow = document.createElement("div");
     mediaRow.className = "level-background-section";
 
-    const currentRoundBackground = String(getRoundField(level, round, roundIndex, "background") || "");
+    const currentSceneBackground = String(getSceneField(level, scene, sceneIndex, "background") || "");
 
     const imageField = document.createElement("div");
     imageField.className = "level-background-left";
@@ -1138,16 +1227,75 @@ function createRoundCard(level, round, roundIndex, totalRounds) {
 
     const pickerText = document.createElement("span");
     pickerText.className = "new-image-picker-text";
-    pickerText.textContent = "no background selected";
+    pickerText.textContent = currentType === "cutscene" ? "no background needed" : "no background selected";
 
     const preview = document.createElement("img");
     preview.className = "new-image-preview hidden";
-    preview.alt = `Level ${level.id} round ${roundIndex + 1} background preview`;
+    preview.alt = `Level ${level.id} Scene ${sceneIndex + 1} background preview`;
     preview.loading = "lazy";
-    loadPreviewImage(preview, pickerText, buildProjectAssetUrl(currentRoundBackground)).catch(() => {
-        preview.classList.add("hidden");
-        pickerText.classList.remove("hidden");
+    const cutscenePreview = document.createElement("video");
+    cutscenePreview.className = "new-image-preview hidden";
+    cutscenePreview.muted = true;
+    cutscenePreview.loop = true;
+    cutscenePreview.autoplay = false;
+    cutscenePreview.controls = false;
+    cutscenePreview.playsInline = true;
+    cutscenePreview.preload = "metadata";
+    const cutsceneToggleBtn = document.createElement("button");
+    cutsceneToggleBtn.type = "button";
+    cutsceneToggleBtn.className = "cutscene-preview-toggle hidden";
+    cutsceneToggleBtn.textContent = "Play Video";
+    const syncCutsceneToggleLabel = () => {
+        cutsceneToggleBtn.textContent = cutscenePreview.paused ? "Play Video" : "Stop Video";
+    };
+    cutsceneToggleBtn.addEventListener("click", async () => {
+        if (cutscenePreview.paused) {
+            try {
+                if (cutscenePreview.readyState === 0) {
+                    cutscenePreview.load();
+                }
+                if (cutscenePreview.currentTime <= 0) {
+                    cutscenePreview.currentTime = 0;
+                }
+                await cutscenePreview.play();
+                setStatus(`Playing cutscene preview for level ${level.id}, Scene ${sceneIndex + 1}.`, "ok");
+            } catch (error) {
+                setStatus(`Failed to play cutscene preview: ${error && error.message ? error.message : "unknown error"}`, "err");
+            }
+        } else {
+            cutscenePreview.pause();
+            setStatus(`Stopped cutscene preview for level ${level.id}, Scene ${sceneIndex + 1}.`);
+        }
+        syncCutsceneToggleLabel();
     });
+    cutscenePreview.addEventListener("play", syncCutsceneToggleLabel);
+    cutscenePreview.addEventListener("pause", syncCutsceneToggleLabel);
+    cutscenePreview.addEventListener("error", () => {
+        const mediaError = cutscenePreview.error;
+        const code = mediaError && typeof mediaError.code === "number" ? mediaError.code : 0;
+        setStatus(`Failed to load cutscene preview video (error code: ${code || "unknown"}).`, "err");
+    });
+    if (currentType !== "cutscene") {
+        loadPreviewImage(preview, pickerText, buildProjectAssetUrl(currentSceneBackground)).catch(() => {
+            preview.classList.add("hidden");
+            pickerText.classList.remove("hidden");
+        });
+    } else {
+        preview.classList.add("hidden");
+        const cutsceneVideoUrl = buildProjectAssetUrl(selectedCutsceneVideo);
+        if (cutsceneVideoUrl) {
+            cutscenePreview.src = cutsceneVideoUrl;
+            cutscenePreview.classList.remove("hidden");
+            cutsceneToggleBtn.classList.remove("hidden");
+            pickerText.classList.add("hidden");
+            syncCutsceneToggleLabel();
+        } else {
+            cutscenePreview.classList.add("hidden");
+            cutsceneToggleBtn.classList.add("hidden");
+            pickerText.classList.remove("hidden");
+            pickerText.textContent = "no cutscene video selected";
+        }
+    }
 
     const backgroundSelectField = document.createElement("div");
     backgroundSelectField.className = "level-background-right";
@@ -1156,7 +1304,7 @@ function createRoundCard(level, round, roundIndex, totalRounds) {
     selectorLabel.textContent = "background image";
     backgroundSelectField.appendChild(selectorLabel);
 
-    const selectedName = String(getRoundField(level, round, roundIndex, "backgroundImageName") || getBackgroundPathLabel(currentRoundBackground) || "").trim();
+    const selectedName = String(getSceneField(level, scene, sceneIndex, "backgroundImageName") || getBackgroundPathLabel(currentSceneBackground) || "").trim();
     const selectedNameText = document.createElement("div");
     selectedNameText.className = "muted";
     selectedNameText.textContent = selectedName ? `selected: ${selectedName}` : "selected: none";
@@ -1164,16 +1312,19 @@ function createRoundCard(level, round, roundIndex, totalRounds) {
     const selectBackgroundBtn = document.createElement("button");
     selectBackgroundBtn.type = "button";
     selectBackgroundBtn.className = "btn-secondary";
-    selectBackgroundBtn.textContent = "Select Background";
+    selectBackgroundBtn.textContent = "Select background";
     selectBackgroundBtn.addEventListener("click", () => {
-        openBackgroundSelectModal(level.id, roundIndex);
+        openBackgroundSelectModal(level.id, sceneIndex);
     });
 
     backgroundSelectField.appendChild(selectedNameText);
     backgroundSelectField.appendChild(selectBackgroundBtn);
+    if (currentType === "cutscene") backgroundSelectField.classList.add("hidden");
 
     pickerButton.appendChild(pickerText);
     pickerButton.appendChild(preview);
+    pickerButton.appendChild(cutscenePreview);
+    pickerButton.appendChild(cutsceneToggleBtn);
     imageField.appendChild(pickerButton);
     mediaRow.appendChild(imageField);
     mediaRow.appendChild(backgroundSelectField);
@@ -1185,10 +1336,10 @@ function createRoundCard(level, round, roundIndex, totalRounds) {
     const removeRoundBtn = document.createElement("button");
     removeRoundBtn.type = "button";
     removeRoundBtn.className = "btn-danger";
-    removeRoundBtn.textContent = "Remove Round";
-    removeRoundBtn.disabled = totalRounds <= 1;
+    removeRoundBtn.textContent = "Remove Scene";
+    removeRoundBtn.disabled = totalScenes <= 1;
     removeRoundBtn.addEventListener("click", () => {
-        openDeleteConfirmModal({ levelId: level.id, roundIndex });
+        openDeleteConfirmModal({ levelId: level.id, sceneIndex });
     });
 
     actionRow.appendChild(removeRoundBtn);
@@ -1206,28 +1357,46 @@ function createLevelCard(level) {
     const card = document.createElement("div");
     card.className = "enemy-card";
 
+    const header = document.createElement("div");
+    header.className = "level-card-header";
+
     const title = document.createElement("h2");
     title.className = "section-title level-card-title";
     title.textContent = `${level.name || `Level ${level.id}`}`;
-    card.appendChild(title);
+    header.appendChild(title);
 
-    const roundsContainer = document.createElement("div");
-    roundsContainer.className = "enemy-panel-list";
-    const rounds = Array.isArray(level.rounds) ? level.rounds : [];
-    rounds.forEach((round, roundIndex) => {
-        roundsContainer.appendChild(createRoundCard(level, round, roundIndex, rounds.length));
+    const collapseBtn = document.createElement("button");
+    collapseBtn.type = "button";
+    collapseBtn.className = "btn-secondary level-collapse-btn";
+    const isCollapsed = state.collapsedLevels.has(level.id);
+    collapseBtn.textContent = isCollapsed ? "\u25BE" : "\u25B4";
+    collapseBtn.addEventListener("click", () => {
+        if (state.collapsedLevels.has(level.id)) state.collapsedLevels.delete(level.id);
+        else state.collapsedLevels.add(level.id);
+        renderLevelPanel();
     });
-    card.appendChild(roundsContainer);
+    header.appendChild(collapseBtn);
+    card.appendChild(header);
+
+    const scenesContainer = document.createElement("div");
+    scenesContainer.className = "enemy-panel-list";
+    if (isCollapsed) scenesContainer.classList.add("hidden");
+    const rounds = Array.isArray(level.scenes) ? level.scenes : [];
+    rounds.forEach((scene, sceneIndex) => {
+        scenesContainer.appendChild(createSceneCard(level, scene, sceneIndex, rounds.length));
+    });
+    card.appendChild(scenesContainer);
 
     const addRoundRow = document.createElement("div");
     addRoundRow.className = "enemy-card-actions";
     const addRoundBtn = document.createElement("button");
     addRoundBtn.type = "button";
-    addRoundBtn.textContent = "Add Round";
+    addRoundBtn.textContent = "Add Scene";
     addRoundBtn.addEventListener("click", () => {
-        addRound(level.id).catch(error => setStatus(error.message, "err"));
+        addScene(level.id).catch(error => setStatus(error.message, "err"));
     });
     addRoundRow.appendChild(addRoundBtn);
+    if (isCollapsed) addRoundRow.classList.add("hidden");
     card.appendChild(addRoundRow);
     return card;
 }
@@ -1244,7 +1413,7 @@ function renderLevelPanel() {
 function formatBackgroundUsage(usageList) {
     if (!Array.isArray(usageList) || usageList.length === 0) return "";
     return usageList
-        .map(entry => `Level ${entry.levelId} Round ${entry.round}`)
+        .map(entry => `Level ${entry.levelId} Scene ${entry.scene}`)
         .join(", ");
 }
 
@@ -1378,9 +1547,10 @@ function renderBackgroundPanel() {
 
 async function init() {
     setupCollapsiblePanels();
+    setupCloseButtons();
     if (!el.levelPanelList) return;
     setStatus("Loading levels...");
-    await Promise.all([fetchLevels(), fetchEnemies(), fetchLevelBackgrounds(), fetchSellableEntries()]);
+    await Promise.all([fetchLevels(), fetchEnemies(), fetchCutsceneVideos(), fetchLevelBackgrounds(), fetchSellableEntries()]);
     renderLevelPanel();
     renderBackgroundPanel();
     setStatus(`Loaded ${state.levels.length} level${state.levels.length === 1 ? "" : "s"}.`, "ok");
@@ -1441,13 +1611,13 @@ if (el.vendorSelectList) {
 
 if (el.deleteConfirmBtn) {
     el.deleteConfirmBtn.addEventListener("click", () => {
-        const pending = state.pendingRoundDelete;
+        const pending = state.pendingSceneDelete;
         if (!pending) {
             closeDeleteConfirmModal();
             return;
         }
         closeDeleteConfirmModal();
-        removeRound(pending.levelId, pending.roundIndex).catch(error => setStatus(error.message, "err"));
+        removeScene(pending.levelId, pending.sceneIndex).catch(error => setStatus(error.message, "err"));
     });
 }
 
